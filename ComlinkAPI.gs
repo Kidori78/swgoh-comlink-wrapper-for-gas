@@ -1,40 +1,61 @@
 /**
- * @Class ComlinkAPI
+ * This version is specifically built for using a hosted Comlink and the swgoh-utils/gamedata
+ * 
+ * @Class Comlink
  * 
 */
-class ComlinkAPI {
+class Comlink {
   /**
-    * ComlinkAPI is a client wrapper for SWGOH Comlink API to make connecting and requesting information from it easier.
+    * ------------ CLASS INFORMATION -----------------
+    *
+    * Comlink is a client wrapper for SWGOH Comlink API to make connecting and requesting information from it easier.
     *
     * Available Methods
-    * - .fetchPlayer()
+    * - .fetchPlayers()
     * - .fetchData()
     * - .fetchEnums()
     * - .fetchLocalization()
-    * - .fetchGuild()
+    * - .fetchGuilds()
+    * - .fetchGuildRosters()
+    * - .fetchEvents()
+    * - .fetchGuildByName()
+    * - .fetchGuildByCriteria()
+    * - .fetchGrandArenaBracket()
+    * - .fetchGrandArenaLeaderboards()
+    * - .fetchGuildLeaderboards()
     * - .getModSetDefinitions()
     * - .getStatDefinitions()
     * 
     * @param {String} host - The full web address where Comlink is w/out the forward slash at the end.
     * @param {String} accessKey - Optional: The public key required if HMAC has been enabled for Comlink connections
     * @param {String} secretKey - Optional: The private key required if HMAC has been enabled for Comlink connections
+    * @param {String} language - Optional: The ISO 639 language code and ISO 3166 country code for the language. Default is "ENG_US"
   */
   constructor(host, accessKey = null, secretKey = null, language = "ENG_US") {
     //-->Endpoints
-    const url =`${host}`;
-    this.url_data =`${url}/data`;
-    this.url_player =`${url}/player`;
-    this.url_guild =`${url}/guild`;
-    this.url_metadata =`${url}/metadata`;
-    this.url_localization =`${url}/localization`;
-    this.url_enums =`${url}/enums`;
     this.endpoint_player ="/player";
+    this.endpoint_playerArena ="/playerArena";
     this.endpoint_guild ="/guild";
+    this.endpoint_getGuilds ="/getGuilds";
+    this.endpoint_getEvents ="/getEvents";
+    this.endpoint_getLeaderboard ="/getLeaderboard";
+    this.endpoint_getGuildLeaderboard ="/getGuildLeaderboard";
     this.endpoint_data ="/data";
     this.endpoint_metadata ="/metadata";
     this.endpoint_localization ="/localization";
     this.endpoint_enums ="/enums";
-    this.usingGithub = (host.indexOf('github') > -1) ? true : false;
+    //-->URLs
+    const url =`${host}`;
+    this.url_player = url + this.endpoint_player;
+    this.url_playerArena = url + this.endpoint_playerArena;
+    this.url_guild = url + this.endpoint_guild;
+    this.url_getGuilds = url + this.endpoint_getGuilds;
+    this.url_getEvents = url + this.endpoint_getEvents;
+    this.url_getLeaderboard = url + this.endpoint_getLeaderboard;
+    this.url_getGuildLeaderboard = url + this.endpoint_getGuildLeaderboard;
+    this.url_metadata = url + this.endpoint_metadata;
+    this.url_enums = url + this.endpoint_enums;
+    this.url_data =`https://raw.githubusercontent.com/swgoh-utils/gamedata/main/`;
     //-->Security settings
     this.accessKey = accessKey;
     this.secretKey = secretKey;
@@ -43,31 +64,8 @@ class ComlinkAPI {
     if(this.accessKey !== null && this.secretKey !== null) {
       this.useHMAC=true;
     }
-    //-->Data Versions
-    this.version = {game:"",localization:""};
-    if(!this.usingGithub){
-      this.version = this.getVersions_(this.url_metadata,this.endpoint_metadata);
-    }
-    this.gameVersion = this.version.game;
-    //-->Localization
-    this.localizationVersion = this.version.localization;
-    const langOptions = {
-      "CHS_CN": (this.usingGithub) ? "CHS_CN.txt" : "Loc_CHS_CN.txt",
-      "CHT_CN": (this.usingGithub) ? "CHT_CN.txt" : "Loc_CHT_CN.txt",
-      "ENG_US": (this.usingGithub) ? "ENG_US.txt" : "Loc_ENG_US.txt",
-      "FRE_FR": (this.usingGithub) ? "FRE_FR.txt" : "Loc_FRE_FR.txt",
-      "GER_DE": (this.usingGithub) ? "GER_DE.txt" : "Loc_GER_DE.txt",
-      "IND_ID": (this.usingGithub) ? "IND_ID.txt" : "Loc_IND_ID.txt",
-      "ITA_IT": (this.usingGithub) ? "ITA_IT.txt" : "Loc_ITA_IT.txt",
-      "JPN_JP": (this.usingGithub) ? "JPN_JP.txt" : "Loc_JPN_JP.txt",
-      "KOR_KR": (this.usingGithub) ? "KOR_KR.txt" : "Loc_KOR_KR.txt",
-      "POR_BR": (this.usingGithub) ? "POR_BR.txt" : "Loc_POR_BR.txt",
-      "RUS_RU": (this.usingGithub) ? "RUS_RU.txt" : "Loc_RUS_RU.txt",
-      "SPA_XM": (this.usingGithub) ? "SPA_XM.txt" : "Loc_SPA_XM.txt",
-      "THA_TH": (this.usingGithub) ? "THA_TH.txt" : "Loc_THA_TH.txt",
-      "TUR_TR": (this.usingGithub) ? "TUR_TR.txt" : "Loc_TUR_TR.txt"
-    }
-    this.language = langOptions[language];
+    //-->Other Settings
+    this.language = this.getLangFileName_(language);
     //-->Maps and data for building units. Eliminates calling fetch each time.
     this.unitMap = null;
     this.categoryMap = null;
@@ -83,64 +81,137 @@ class ComlinkAPI {
 
   /************************************************************
    * Returns the specified player profile from the api
-   * @param {Integer} allyCode - The player's ally code to retrieve data for
+   * @param {Array} id - The player's allycode or playerId to retrieve data for
    * @param {Bool} enums - Optional: Flag to return enum values in the response
    * @param {Bool} preBuild - Optional: Flag to return response with additional data that is all localized
-   * @returns {Object} rawData - Returns the requested player profile in json format
+   * @param {Integer} limit - Optional: Number of requests to send at once
+   * @return {Array} Returns an array of all requested player profile objects in json format
   */
-  fetchPlayer(allyCode, enums = false, preBuild = false){
-    var rawData
-    if(this.usingGithub){
-      this.url_player = this.url_player + "/player.json";
-      rawData = this.fetchAPI_(this.url_player, "{}", null, "GET")
-    }else{
-      rawData = this.fetchAPI_(this.url_player,this.getPayload_(this.endpoint_player,allyCode, null, enums), this.endpoint_player);
+  fetchPlayers(id, enums = false, preBuild = false, limit = 10){
+    var request = [];
+    var batches = [];
+    var playerData = [];
+    var response = [];
+    id.forEach(player =>
+        request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)))
+    );
+    while (request.length > 0) {
+      if(limit > request.length){
+        limit = request.length;
+      }
+      batches.push(request.splice(0, limit));
     }
+    batches.forEach(batch => {
+      response.push(this.fetchAllAPI_(batch));
+    });
     
-    if(!preBuild){
-      return rawData;
+    if(preBuild){
+      response.forEach(batch => {
+        batch.forEach(player => { 
+          playerData.push(this.getBuiltPlayerData_(player))
+        });
+      });
+      return playerData;
     }else{
-      let builtData = this.getBuiltPlayerData_(rawData);
-      return builtData;
+      response.forEach(batch => {
+        batch.forEach(player => {
+          playerData.push(player)
+        });
+      });
+      return playerData;
     }
   }
   
 
   /************************************************************
-   * Returns the specified guild player profiles from the api.
-   * @param {Integer} allyCode - The player's ally code to retrieve guild data for
+   * Returns the specified guild profiles from the api.
+   * @param {Array} id - An array of strings containing the player id, allycode or guild id to retrieve guild data for
    * @param {Bool} enums - Optional: Flag to return enum values in the response
-   * @param {Bool} preBuild - Optional: Flag to return response with additional data that is all localized
-   * @returns {Object} rawData - Returns the requested guild profiles in json format
+   * @param {Bool} isPlayerID - Optional: Use when sending playerIds to get guilds
+   * @return {Array} Returns and array of all requested guild profiles in json format
   */
-  fetchGuild(allyCode, enums = false, preBuild = false){
+  fetchGuilds(id, enums = false, isPlayerID = false){
     var rawData = [];
-    if(this.usingGithub){
-      let segment
-      let response = [];
-      for(var seg = 1; seg < 6; seg++){
-        segment = "guild" + seg + ".json";
-        response = this.fetchAPI_(this.url_guild + "/" + segment, "{}", null, "GET");
-        for(var p=0; p < response.length; p++){
-          if(!preBuild){
-            rawData.push(response[p]);
-          }else{
-            rawData.push(this.getBuiltPlayerData_(response[p]));
-          }
-
-        }
-      }
-    }else{
-      //Comlink currently does not offer this and you have to use the fetchPlayer for each ally code.
+    var guildIds = [];
+    var response = [];
+    var request = [];
+    //-->Find guild ids
+    if(isPlayerID || id[0].toString().length < 12){
+      id.forEach(player => {
+        request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)));
+      });
+      response = this.fetchAllAPI_(request);
+      response.forEach(player => {
+        guildIds.push(player.guildId);
+      });
+      response = [];
+      request = [];
+    } else {
+      guildIds = id;
     }
+    //-->Grab guild data
+    guildIds.forEach(guild => {
+      request.push(this.requestParameters_(this.url_guild,this.getPayload_(this.endpoint_guild, guild, enums)));
+    });
+
+    response = this.fetchAllAPI_(request);
+    response.forEach(guild => {
+      rawData.push(guild.guild);
+    });
+
     return rawData;
   }
 
 
+ /************************************************************
+   * Returns the specified guild's members and their roster.
+   * @param {Array} id - An array of strings containing the player id, allycode or guild id to retrieve guild data for
+   * @param {Bool} enums - Optional: Flag to return enum values in the response
+   * @param {Bool} preBuild - Optional: Flag to return response with additional data that is all localized
+   * @param {Bool} isPlayerID - Optional: Use when sending playerIds to get guilds
+   * @return {Array} Returns an array of all requested guild profiles including member profiles and rosters in json format
+  */
+  fetchGuildRosters(id, enums = false, preBuild = false, isPlayerID = false){
+    var guildIds = [];
+    var guildData = [];
+    var memberData = [];
+    //-->Find guild ids
+    if(isPlayerID || id[0].toString().length < 12){
+      this.fetchPlayers(id).forEach(player => {
+        guildIds.push(player.guildId);
+      });
+    } else {
+      guildIds = id;
+    }
+    //-->Grab guild data
+    guildData = this.fetchGuilds(guildIds,enums);
+
+    //-->Grab member rosters
+    for(let g = 0; g < guildData.length;g++){
+      //-->Add player data to member profile
+      for(let m = 0; m < guildData[g].member.length; m++){
+        memberData = this.fetchPlayers([guildData[g].member[m].playerId],enums,preBuild)[0];
+        guildData[g].member[m]["localZoneOffsetMinutes"] = memberData.localTimeZoneOffsetMinutes;
+        guildData[g].member[m]["allyCode"] = memberData.allyCode;
+        guildData[g].member[m]["rosterUnit"] = memberData.rosterUnit;
+        guildData[g].member[m]["datacron"] = memberData.datacron;
+        guildData[g].member[m]["pvpProfile"] = memberData.pvpProfile;
+        guildData[g].member[m]["playerRating"] = memberData.playerRating;
+        guildData[g].member[m]["profileStat"] = memberData.profileStat;
+        guildData[g].member[m]["unlockedPlayerTitle"] = memberData.unlockedPlayerTitle;
+        guildData[g].member[m]["unlockedPlayerPortrait"] = memberData.unlockedPlayerPortrait;
+        guildData[g].member[m]["selectedPlayerTitle"] = memberData.selectedPlayerTitle;
+        guildData[g].member[m]["selectedPlayerPortrait"] = memberData.selectedPlayerPortrait;
+      }
+    }
+
+    return guildData;
+  }
+
   /************************************************************
    * Returns the game data collections
    * @param {Array} collections - An array of specified collection names
-   * - Accepts all collection names found at https://gitlab.com/swgoh-tools/swgoh-comlink/-/wikis/Game-Data
+   * - Accepts all collection names found at https://github.com/swgoh-utils/swgoh-comlink/wiki/Game-Data
    * - Also accepts the following named groups
    * - "for_gameData" = collections required for building gameData.json
    * - "for_conquest" - collections related to conquest
@@ -149,15 +220,13 @@ class ComlinkAPI {
    * - "for_playerProfile" - all collections used to expand player data
    * _ "for_datacrons" - collections related to Datacrons
    * - "for_grandArena" - collections related to Grand Arena
-   * @returns {Object} rawData - Returns the requested collections in json format
+   * @return {Array} Returns an array of all requested collections in json format
   */
   fetchData(collections = []){
+    let request = [];
+    let dataOrder = [];
     let requestedData = [];
-    let allData = [];
     let getCollections = [];
-    let searchAll = false;
-    let reqSegments = [];
-    let segmentMap = this.getSegmentDetails_();
 
     //-->Build array of collections to find
     collections.forEach(function(collection){
@@ -189,67 +258,139 @@ class ComlinkAPI {
             tempColl = ["seasonDefinition","seasonRewardTable","territoryTournamentDailyRewardTable","territoryTournamentDefinition","territoryTournamentDivisionDefinition","territoryTournamentLeagueDefinition"];
             break;
           default:
-            throw new Error("ERROR: COLLECTION NOT FOUND\nThe collect group specified does not exist.");
+            throw new Error("ERROR: COLLECTION NOT FOUND\nThe collection group specified does not exist.");
         }
 
-        //-->Find segment to grab or flag to search through all
         tempColl.forEach(function(coll){
           if(getCollections[coll] === undefined){
             getCollections[coll] = coll
-            if(segmentMap[coll] !== undefined){
-              reqSegments[segmentMap[coll]] = segmentMap[coll];
-            }else{
-              searchAll = true;
-            }
           }
         });
       }else{
         getCollections[collection] = collection;
-        if(segmentMap[collection] !== undefined){
-          reqSegments[segmentMap[collection]] = segmentMap[collection];
-        }else{
-          searchAll = true;
-        }
       }
     });
 
-    //-->Fetch all of the data from the api
-    if(!this.usingGithub){
-      let response = [];
-      if(searchAll){
-        for(var seg=1; seg < 99; seg++){
-          try{
-            response = this.fetchAPI_(this.url_data,this.getPayload_(this.endpoint_data,null, seg), this.endpoint_data);
-            allData.push(response[0]);
-          }catch(e){
-            break;
-          }
-        }
-      }else{
-        for(const segment in reqSegments){
-          response = this.fetchAPI_(this.url_data,this.getPayload_(this.endpoint_data,null, reqSegments[segment]), this.endpoint_data);
-          if(allData["ability"] === undefined){
-            allData = response;
-          }else{
-            for(const col in response){
-              if(response[col] !== null && response[col].length > 0){
-                allData[col] = response[col];
-              }
-            }
-          }
-        }
-      }
-    }else{
-      for(const col in getCollections){
-        allData[col] = this.fetchAPI_(this.url_data + "/" + col + ".json", "{}", null, "GET");
-      }
+    //-->Fetch all of the data from the api  
+    for(const col in getCollections){    
+      request.push(this.requestParameters_(this.url_data + col + ".json", "{}", "GET"));
+      dataOrder.push(col);   
+    }
+    let response = this.fetchAllAPI_(request);
+    for(let r=0; r < response.length; r++){
+      requestedData[dataOrder[r]] = response[r].data;
     }
 
-    //-->Build array to return only including the needed data
-    for(const col in getCollections){
-      requestedData[col] = allData[col];
-    }
     return requestedData;
+  }
+
+
+/************************************************************
+   * Returns the current and upcoming events for the game
+  */
+  fetchEvents(){
+    return this.fetchAPI_(this.url_getEvents, this.getPayload_(this.endpoint_getEvents));
+  }
+
+
+/************************************************************
+   * Returns a list of guild profiles that contain the specified name in them
+   * @param {String} name - The name of the guild
+   * @param {Integer} count - Optional: The number of results to return
+   * @param {Boolean} enums - Optional: Flag to return enum values in the response
+   * @return {Array} The list of guild profiles 
+  */
+  fetchGuildByName(name,count = 10000, enums = false){
+    let options = { name: name, count: count};
+    return this.fetchAPI_(this.url_getGuilds, this.getPayload_(this.endpoint_getGuilds,null,enums,options));
+  }
+
+
+/************************************************************
+   * Returns a list of guild profiles that contain the specified name in them
+   * @param {Object} options - Contains the keys and values to search for:
+   *  - minMemberCount: 1-50 Default: 1
+   *  - maxMemberCount: 1-50 Default: 50
+   *  - minGuildGalacticPower: 1+ Default: 1
+   *  - maxGuildGalacticPower: 1+ Default: 999999999
+   *  - count: 1-10000 Default: 10000
+   * @param {Boolean} enums - Optional: Flag to return enum values in the response
+   * @return {Array} THe list of guild profiles
+  */
+  fetchGuildByCriteria(options = {}, enums = false){
+    return this.fetchAPI_(this.url_getGuilds, this.getPayload_(this.endpoint_getGuilds,null,enums,options));
+  }
+
+
+/************************************************************
+   * Returns the specified GAC Bracket leaderboard. Can only be retrieved during GAC and only for that GAC.
+   * @param {String} eventID - The Event ID and Instance ID from the /getEvents endpoint
+   *  - E.G. "CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_36:O1676412000000"
+   * @param {String} groupID - The Event ID, Instance ID, League name, and bracket number 0+ separated by :
+   *  - E.G. "CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_36:O1676412000000:KYBER:100"
+   * @return {Object} A list of all player IDs
+  */
+  fetchGrandArenaBracket(eventID, groupID, enums = false){
+    let options = { eventInstanceId: eventID, groupId: groupID};
+    return this.fetchAPI_(this.url_getLeaderboard, this.getPayload_(this.endpoint_getLeaderboard,null,enums,options));
+  }
+
+
+/************************************************************
+   * Returns the specified Top 50 Grand Arena League and Division Leaderboards
+   * @param {Integer} league - The numeric value for the league
+   *  - 20 = Carbonite
+   *  - 40 = Bronzium
+   *  - 60 = Chromium
+   *  - 80 = Aurodium
+   *  - 100 = Kyber
+   * @param {Integer} division - The numeric value for the division
+   *  - 5 = 5
+   *  - 10 = 4
+   *  - 15 = 3
+   *  - 20 = 2
+   *  - 25 = 1
+   * @return {Object} A list of all players in the leaderboard
+  */
+  fetchGrandArenaLeaderboards(league, division, enums = false){
+    let options = {league: league, division: division};
+    return this.fetchAPI_(this.url_getLeaderboard, this.getPayload_(this.endpoint_getLeaderboard,null,enums,options));
+  }
+
+
+/************************************************************
+   * Returns the specified guild leaderboard
+   * @param {Integer} type - The type of leaderboard to get
+   *  - 0 = Total Raid Points
+   *  - 2 = Specified Raid Points
+   *  - 3 = Galactic Power
+   *  - 4 = Territory Battle
+   *  - 5 = Territory Wars
+   * @param {Integer} month - Optional: Indicates returning this month or previous
+   *  - 0 = Current month
+   *  - 1 = Previous month
+   * @param {Integer} count - Optional: The number of results tp return. Default and max is 200
+   * @param {String} event The id of the event to get. Required for types 2, 4, and 5.
+   *  - RAIDS (2)
+   *  - sith_raid = Sith Triumverate
+   *  - rancor = The Pit
+   *  - aat = Tank Takedown
+   *  - rancor_challenge = The Pit: Challenge Tier
+   * - TERRITORY BATTLES (4)
+   *  - t01D = Rebel Assault
+   *  - t02D = Imperial Retaliation
+   *  - t03D = Separatist Might
+   *  - t04D = Republic Offensive
+   *  - t05D = Rise of the Empire
+   * - TERRITORY WARS (5)
+   *  - TERRITORY_WAR_LEADERBOARD = Territory War
+  */
+  fetchGuildLeaderboards(type, month = 0, count = 200, event = null, enums = false){
+    let options = {leaderboardType: type, monthOffset: month, count: count };
+    if(event !== null){ 
+      options["defId"] = event; 
+    }
+    return this.fetchAPI_(this.url_getGuildLeaderboard, this.getPayload_(this.endpoint_getGuildLeaderboard,null,enums,options));
   }
 
 
@@ -257,11 +398,7 @@ class ComlinkAPI {
    * Returns the enums used for the game data
   */
   fetchEnums(){
-    var rawData = [];
-    if(!this.usingGithub){
-      rawData = this.fetchAPI_(this.url_enums,this.getPayload_(this.endpoint_enums), this.endpoint_enums,"GET");
-    }
-    return rawData;
+    return this.fetchAPI_(this.url_enums, this.getPayload_(this.endpoint_enums), "GET");
   }
 
 
@@ -272,35 +409,7 @@ class ComlinkAPI {
   fetchLocalization(language = this.language){
     if(this.localization !== null){ return this.localization }
     var localization = [];
-    var langData = [];
-    if(this.usingGithub){
-      langData[language] = this.fetchAPI_(this.url_localization + "/" + language, "{}", "/localization", "GET");
-    }else{
-      let rawZip = this.fetchAPI_(this.url_localization,this.getPayload_(this.endpoint_localization),this.endpoint_localization);
-      let zippedFile = Utilities.base64Decode(rawZip); 
-      let unZippedFile = Utilities.unzip(zippedFile);
-      rawZip = null;
-      zippedFile = null;
-      unZippedFile.forEach(function(contents){
-        if(contents.getContentType() === "application/json"){
-          langData[language] = JSON.parse(contents.getDataAsString())[language];
-        }else{
-          if(contents.getName() === language){
-            langData[contents.getName()] = contents.getDataAsString();
-          }
-        }
-      });
-    }
-
-    let tempLoc = langData[language].split("\n");
-    tempLoc.forEach(function(id){
-      let pos = id.indexOf("|");
-      if(pos > -1){
-        let key = id.substring(0, pos);
-        let val = id.substring(pos+1,id.length);
-        localization[key] = val;
-      }
-    });
+    localization = this.fetchAPI_(this.url_data + language, "{}", "GET").data;
     this.localization = localization;
     return localization;
   }
@@ -310,10 +419,10 @@ class ComlinkAPI {
     * Attempts to request JSON data from the APIs.
     * @param {String} url - Full web address of Comlink including endpoint
     * @param {Object} payload - The requested data as an object literal
-    * @param {String} endpoint - The endpoint being posted to
     * @param {String} methodType - The type of method to get the request in: Default is "POST"
   */
-  fetchAPI_(url,payload,endpoint, methodType = "POST") {
+  fetchAPI_(url,payload, methodType = "POST") {
+    let endpoint = url.substring(url.lastIndexOf("/"),url.length);
     let parameters;
     let postHeader={};
     parameters={
@@ -321,7 +430,7 @@ class ComlinkAPI {
       contentType: 'application/json',
       muteHttpExceptions: true
     };
-    if(this.useHMAC && endpoint !== this.endpoint_enums && !this.usingGithub) {
+    if(this.useHMAC && endpoint !== this.endpoint_enums && methodType !== "GET") {
       let requestTime = new Date().getTime().toString();
       this.getHMAC_(endpoint,payload,requestTime);
       postHeader={
@@ -332,23 +441,73 @@ class ComlinkAPI {
     parameters["headers"] = postHeader;
     if(methodType === "POST"){
       parameters["payload"] = JSON.stringify(payload);
+      parameters.headers["Accept-Encoding"] = "gzip, deflate";
     }
-    let response = UrlFetchApp.fetch(url,parameters);
-    /* Check for errors */
-    if(response.getResponseCode()==200) {
-      if(endpoint === "/localization"){
-        if(this.usingGithub){
-          return response.getContentText();
-        }else{
-          return response.getBlob();
-        }
-      }else{
+    //--> Try the request multiple times
+    var msg
+    for(var tries = 1; tries < 4;tries++){
+      let response = UrlFetchApp.fetch(url,parameters);
+      /* Check for errors */
+      if(response.getResponseCode()==200) {
         return JSON.parse(response.getContentText());
+      } else {
+        msg = response.getResponseCode()+' : There was a problem with your request to the API. Please verify your information and try again.\n\nResponse Message:\n'+response.getContentText();
+        Logger.log(msg);
       }
     }
-    else {
-      throw new Error(response.getResponseCode()+' : There was a problem with your request to the API. Please verify your information and try again.\n\nResponse Message:\n'+response.getContentText());
+    throw new Error(msg);
+  }
+
+  /********************************************************************************************
+   * Attempts to request JSON data from the APIs.
+   * @param {string} url - API 'Get' request
+   * @return {array} The requested data as an object literal
+  */
+  /* NOTE: This function does not appear to speed up the time taken to retrieve the data. */
+  fetchAllAPI_(payload = []){
+    var response = UrlFetchApp.fetchAll(payload);
+    var requested = [];
+    /* Check for errors */
+    var msg
+    response.forEach(function(request){
+        if(request.getResponseCode() == 200){
+          requested.push(JSON.parse(request.getContentText()));
+        } else {
+           msg = request.getResponseCode()+' : There was a problem with your request to the API. Please verify your information and try again.\n\nResponse Message:\n'+request.getContentText();
+          throw new Error(msg);
+        }
+      });
+      return requested;
+    
+  }
+
+  /********************************************************************************************
+   * Returns payload and parameters, used for creating fetchAll payloads.
+   * @return {array} parameters - The request as an object
+  */
+  requestParameters_(url, payload, methodType = "POST"){
+    let endpoint = url.substring(url.lastIndexOf("/"),url.length);
+    let postHeader={};
+    let parameters = {
+      url: url,
+      method: methodType,
+      contentType: 'application/json',
+      muteHttpExceptions: true
+    };
+    if(this.useHMAC && endpoint !== this.endpoint_enums && methodType !== "GET") {
+      let requestTime = new Date().getTime().toString();
+      this.getHMAC_(endpoint,payload,requestTime);
+      postHeader={
+        'Authorization': `HMAC-SHA256 Credential=${this.accessKey},Signature=${this.hmacSignature}`,
+        'X-Date': requestTime
+      };
     }
+    parameters["headers"] = postHeader;
+    if(methodType === "POST"){
+      parameters["payload"] = JSON.stringify(payload);
+      parameters.headers["Accept-Encoding"] = "gzip, deflate";
+    }
+    return parameters;
   }
 
   /****************************************************************************
@@ -379,78 +538,154 @@ class ComlinkAPI {
     }
   }
 
-  /****************************************************************************
-  * Grabs the cached game and localization versions or requests them if expired.
-  * @param {String} url - The full web addrss with endpoint
-  * @payload {String} endpoint - The api endpoint to request data from
-  */
-  getVersions_(url, endpoint) {
-    const cache = CacheService.getScriptCache();
-    if(!cache.get("gameVer")){
-      this.initializeVersion_(url,endpoint);
-    }
-    let gameVer = cache.get("gameVer");
-    let langVer = cache.get("langVer");
-    return {"game": gameVer, "localization": langVer};
-  }
-
-
- /****************************************************************************
-  * Gets the current game and localization versions and caches them.
-  * @param {String} url - The full web addrss with endpoint
-  * @payload {String} endpoint - The api endpoint to request data from
-  */
-  initializeVersion_(url,endpoint){
-    const metadata = this.fetchAPI_(url,this.getPayload_(endpoint), endpoint);
-    let ver = { "game": metadata.latestGamedataVersion, "localization": metadata.latestLocalizationBundleVersion };
-    const seconds = 3600; //max 21600 (6 hr)
-    const cache = CacheService.getScriptCache();
-    cache.put("gameVer", ver.game, seconds);
-    cache.put("langVer", ver.localization, seconds);
-  }
-
 
  /****************************************************************************
   * Grabs the requested payload to use with the api request.
   * @param {String} endpoint - The api endpoint to request data from
-  * @param {Integer} allyCode - The player's ally code to get data for
-  * @param {Integer} segment - The data segment to request
+  * @param {Integer} id - The allycode, playerId or guildId to get data for
   * @param {Bool} enums - If the response should be in enums
+  * @param {Object} options - The additional request keys and modified values
   */
-  getPayload_(endpoint, allyCode = null, segment = null, enums = false){
+  getPayload_(endpoint, id = null, enums = false, options = null){
+    let payload = {};
     switch(endpoint){
       case "/metadata":
         return {
           "payload": {}
         };
-      case "/localization":
-        return {
-          "payload": {
-            "id": this.localizationVersion
-          },
-          "unzip": false
-        };
       case "/enums":
         return {};
       case "/data":
+        return {};
+      case "/player": //and playerArena
+        id = id.toString();
+        if(id.length < 12){
+          id = id.replace(/-/g,"");
+          return {
+            "payload": {
+              "allyCode": id
+            },
+            "enums": enums
+          };
+        } else{
+          return {
+            "payload": {
+              "playerId": id
+            },
+            "enums": enums
+          };
+        }
+      case "/guild":
         return {
           "payload": {
-              "version": this.gameVersion,
-              "includePveUnits": false,
-              "requestSegment": segment
+            "guildId": id.toString(),
+            "includeRecentGuildActivityInfo": true
           },
           "enums": enums
         };
-      case "/player":
+      case "/getGuilds":
+        if(options.name){
+          payload = {
+            "payload": {
+              "filterType": 4,
+              "count": (options.count) ? options.count : 10000,
+              "name": options.name
+            }
+          }
+        }else{
+          payload = {
+            "payload": {
+              "filterType": 5,
+              "count": (options.count) ? options.count : 10000,
+              "searchCriteria": {
+                "minMemberCount": (options.minMemberCount) ? options.minMemberCount : 1,
+                "maxMemberCount": (options.maxMemberCount) ? options.maxMemberCount : 50,
+                "minGuildGalacticPower": (options.minGuildGalacticPower) ? options.minGuildGalacticPower : 1,
+                "maxGuildGalacticPower": (options.maxGuildGalacticPower) ? options.maxGuildGalacticPower : 999999999,
+                "includeInviteOnly": true
+              }
+            }
+          }
+          payload["enums"] = enums;
+          if(options.recentTbParticipatedIn){
+            payload.payload.searchCriteria["recentTbParticipatedIn"] = options.recentTbParticipatedIn;
+          }          
+        }
+
+        return payload;
+      case "/getEvents":
         return {
-          "payload": {
-            "allyCode": allyCode.toString()
-          },
           "enums": enums
         };
+      case "/getLeaderboard":
+        if(options.groupId){
+          payload = {
+            "payload": {
+              "leaderboardType": 4,
+              "eventInstanceId": "CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_36:O1676412000000",
+              "groupId": "CHAMPIONSHIPS_GRAND_ARENA_GA2_EVENT_SEASON_36:O1676412000000:KYBER:100"
+            },
+          }
+        }else{
+          payload = {
+            "payload": {
+              "leaderboardType": 6,
+              "league": 100,
+              "division": 25
+            },
+          }
+        }
+        payload["enums"] = enums;
+        return payload;
+      case "/getGuildLeaderboard":
+        payload = {
+          "payload" : {
+            "leaderboardId":[
+              { 
+                "leaderboardType": options.leaderboardType,
+                "monthOffset": (options.monthOffset) ? options.monthOffset : 0
+              }
+            ],
+            "count": (options.count) ? options.count : 200 
+          }
+        }
+        payload["enums"] = enums;
+        if(options.defId){
+          payload.payload.leaderboardId[0]["defId"] = options.defId;
+        }
+        return payload;
+
       default:
         throw new Error("API ERROR:\nThe endpoint " + endpoint + "is not a valid endpoint.");
     }
+  }
+
+
+  /***************************************************************************
+   * Returns the file name for the chosen localization
+   * @param {String} language - The chosen language
+   * @param {Boolean} useGithub - Optional: Flag to force the use of the github naming convention
+   * @return {String} - The name of the file
+   */
+  getLangFileName_(language){
+    language = language.toUpperCase();
+    var langOptions = {
+      "CHS_CN": "Loc_CHS_CN.txt.json",
+      "CHT_CN": "Loc_CHT_CN.txt.json",
+      "ENG_US": "Loc_ENG_US.txt.json",
+      "FRE_FR": "Loc_FRE_FR.txt.json",
+      "GER_DE": "Loc_GER_DE.txt.json",
+      "IND_ID": "Loc_IND_ID.txt.json",
+      "ITA_IT": "Loc_ITA_IT.txt.json",
+      "JPN_JP": "Loc_JPN_JP.txt.json",
+      "KOR_KR": "Loc_KOR_KR.txt.json",
+      "POR_BR": "Loc_POR_BR.txt.json",
+      "RUS_RU": "Loc_RUS_RU.txt.json",
+      "SPA_XM": "Loc_SPA_XM.txt.json",
+      "THA_TH": "Loc_THA_TH.txt.json",
+      "TUR_TR": "Loc_TUR_TR.txt.json"
+    }
+    return langOptions[language];
   }
 
 
@@ -464,7 +699,7 @@ class ComlinkAPI {
     const statDefinitions = this.getStatDefinitions();
     if(this.gameData === null){ this.gameData = this.fetchData(["for_playerProfile"]); }
     var gameData = this.gameData;
-    
+    var isPercentValue = {1: false,5:false,28:false,41:false,42:false, 16: true, 17:true, 18:true, 48:true,49:true,52:true,53:true,54:true,55:true,56:true };
 
     //-->Build Maps to reduce iterations
     var unitMap = (this.unitMap === null) ? this.getMap_(gameData.units, "unitMap") : this.unitMap;
@@ -477,7 +712,7 @@ class ComlinkAPI {
 
     //-->Update and localize Profile data
     if(rawPlayerData.selectedPlayerTitle !== null){
-      rawPlayerData.selectedPlayerTitle.id = localization[rawPlayerData.selectedPlayerTitle.id + "_NAME"];
+      rawPlayerData.selectedPlayerTitle["nameKey"] = localization[rawPlayerData.selectedPlayerTitle.id + "_NAME"];
     }
     if(rawPlayerData.selectedPlayerPortrait !== null){
       rawPlayerData.selectedPlayerPortrait["nameKey"] = localization[rawPlayerData.selectedPlayerPortrait.id + "_TITLE"];
@@ -487,18 +722,27 @@ class ComlinkAPI {
     }
     /* Optional: Localizes all obtained portraits and titles*/
     for(var i=0; i < rawPlayerData.unlockedPlayerPortrait.length; i++){
-      rawPlayerData.unlockedPlayerPortrait[i]["id"] = localization[rawPlayerData.unlockedPlayerPortrait[i].id + "_TITLE"];
+      rawPlayerData.unlockedPlayerPortrait[i]["nameKey"] = localization[rawPlayerData.unlockedPlayerPortrait[i].id + "_TITLE"];
     }
     for(var i=0; i < rawPlayerData.unlockedPlayerTitle.length; i++){
       rawPlayerData.unlockedPlayerTitle[i].nameKey = localization[rawPlayerData.unlockedPlayerTitle[i].id + "_NAME"];
     }
     //*/
 
-    //-->GAC Information
+    //-->GAC and Squad Information
     for(var i=0; i < rawPlayerData.seasonStatus.length; i++){
       rawPlayerData.seasonStatus[i].division = divisions[rawPlayerData.seasonStatus[i].division];
     }
-    rawPlayerData.playerRating.playerRankStatus.divisionId = divisions[rawPlayerData.playerRating.playerRankStatus.divisionId];
+    if(rawPlayerData.playerRating.playerRankStatus !== null){
+      rawPlayerData.playerRating.playerRankStatus.divisionId = divisions[rawPlayerData.playerRating.playerRankStatus.divisionId];
+    }
+    for(let a=0; a < 2; a ++){
+      for(let u=0; u < rawPlayerData.pvpProfile[a].squad.cell.length;u++){
+        let unitIndx = unitMap[rawPlayerData.pvpProfile[a].squad.cell[u].unitDefId];
+        let unit = gameData.units[unitIndx];
+        rawPlayerData.pvpProfile[a].squad.cell[u]["defId"] = unit.baseId;
+      }
+    }
 
     //-->Expand Datacron information
     for(var i=0; i < rawPlayerData.datacron.length;i++){
@@ -538,8 +782,12 @@ class ComlinkAPI {
       rawPlayerData.rosterUnit[u]["combatType"] = unit.combatType;
       rawPlayerData.rosterUnit[u]["isGalacticLegend"] = unit.legend;
       rawPlayerData.rosterUnit[u]["baseId"] = unit.baseId;
+      rawPlayerData.rosterUnit[u]["defId"] = unit.baseId;
       rawPlayerData.rosterUnit[u]["name"] = localization[unit.nameKey];
       rawPlayerData.rosterUnit[u]["alignment"] = unit.forceAlignment;
+      rawPlayerData.rosterUnit[u]["rarity"] = rawPlayerData.rosterUnit[u].currentRarity;
+      rawPlayerData.rosterUnit[u]["level"] = rawPlayerData.rosterUnit[u].currentLevel;
+      rawPlayerData.rosterUnit[u]["gear"] = rawPlayerData.rosterUnit[u].currentTier;
       //-->Get categories
       let catList = [];
       for(let c=0; c < unit.categoryId.length; c++){
@@ -580,7 +828,8 @@ class ComlinkAPI {
         }
         skillsList.push({
           id: skill.id,
-          currentTier: (rosterSkillMap[skill.id] + 2) || 1,
+          name: localization[skill.nameKey],
+          tier: (rosterSkillMap[skill.id]) ? (rosterSkillMap[skill.id] + 2) : 1,
           maxTier: (skill.tier.length + 1),
           isZeta: skill.isZeta,
           isOmicron: (skill.omicronMode > 1 ) ? true : false,
@@ -608,7 +857,8 @@ class ComlinkAPI {
         }
         skillsList.push({
           id: skill.id,
-          currentTier: (rosterSkillMap[skill.id] + 2) || 1,
+          name: localization[skill.nameKey],
+          tier: (rosterSkillMap[skill.id]) ? (rosterSkillMap[skill.id] + 2) : 1,
           maxTier: (skill.tier.length + 1),
           isZeta: skill.isZeta,
           isOmicron: (skill.omicronMode > 1 ) ? true : false,
@@ -617,7 +867,10 @@ class ComlinkAPI {
           hasOmicron: omicron
         });
       }
-      rawPlayerData.rosterUnit[u].skill = skillsList;
+      rawPlayerData.rosterUnit[u]["skills"] = skillsList;
+      rawPlayerData.rosterUnit[u].skill = null;
+      //rawPlayerData.rosterUnit[u]["equipped"] = rawPlayerData.rosterUnit[u].equipment.splice(0);
+
       //-->Get Mods
       let modSet = this.getModSetDefinitions();
       for(let m=0; m < rawPlayerData.rosterUnit[u].equippedStatMod.length;m++){
@@ -631,8 +884,31 @@ class ComlinkAPI {
           rawPlayerData.rosterUnit[u].equippedStatMod[m].secondaryStat[ss].stat["statName"] = localization[statDefinitions[rawPlayerData.rosterUnit[u].equippedStatMod[m].secondaryStat[ss].stat.unitStatId].nameKey];
         }
       }
+      rawPlayerData.rosterUnit[u]["mods"] = rawPlayerData.rosterUnit[u].equippedStatMod.map(function(mod){
+        return {
+            id: mod.id,
+            level: mod.level,
+            tier: mod.tier,
+            pips: mod.pips,
+            "set": Number(mod["setId"]),
+            slot: mod.slot,
+            primaryStat: {
+              unitStat: mod.primaryStat.stat.unitStatId,
+              value: (isPercentValue[mod.primaryStat.stat.unitStatId]) ? mod.primaryStat.stat.unscaledDecimalValue / 1000000 : mod.primaryStat.stat.unscaledDecimalValue / 100000000
+            },
+            secondaryStat: (mod.secondaryStat) ? mod.secondaryStat.map(function(secondary){
+              return {
+                unitStat: secondary.stat.unitStatId,
+                value: (isPercentValue[secondary.stat.unitStatId]) ? secondary.stat.unscaledDecimalValue / 1000000 : secondary.stat.unscaledDecimalValue / 100000000,
+                roll: secondary.roll.length,
+                rollValues: secondary.roll
+              }
+            }) : []
+          }
+      });
     }
-
+    //rawPlayerData["roster"] = rawPlayerData.rosterUnit.splice(0);
+    //rawPlayerData.rosterUnit = null;
     return rawPlayerData;
   }
 
@@ -673,89 +949,6 @@ class ComlinkAPI {
       return map;
   }
 
-
-  /***************************************************************************
-   * Returns an object with the segment location for each collection
-   */
-  getSegmentDetails_(){
-    const segments = {
-      battleEnvironments: 1,
-      battleTargetingRule: 1,
-      category: 1,
-      effect: 1,
-      effectIconPriority: 1,
-      environmentCollection: 1,
-      equipment: 1,
-      eventSampling: 1,
-      guildBanner: 1,
-      helpEntry: 1,
-      material: 1,
-      persistentVfx: 1,
-      playerPortrait: 1,
-      playerTitle: 1,
-      powerUpBundle: 1,
-      requirement: 1,
-      skill: 1,
-      socialStatus: 1,
-      table: 1,
-      targetingSet: 1,
-      timeZoneChangeConfig: 1,
-      unlockAnnouncementDefinition: 1,
-      xpTable: 1,
-      ability: 2,
-      challenge: 2,
-      challengeStyle: 2,
-      cooldown: 2,
-      dailyActionCap: 2,
-      energyReward: 2,
-      galacticBundle: 2,
-      guildExchangeItem: 2,
-      guildRaid: 2,
-      linkedStoreItem: 2,
-      modRecommendation: 2,
-      mysteryBox: 2,
-      mysteryStatMod: 2,
-      raidConfig: 2,
-      recipe: 2,
-      savedSquadConfig: 2,
-      scavengerConversionSet: 2,
-      seasonDefinition: 2,
-      seasonDivisionDefinition: 2,
-      seasonRewardTable: 2,
-      seasonLeagueDefinition: 2,
-      starterGuild: 2,
-      statMod: 2,
-      statModSet: 2,
-      statProgression: 2,
-      territoryBattleDefinition: 2,
-      territoryTournamentDefinition: 2,
-      territoryTournamentDivisionDefinition: 2,
-      territoryTournamentLeagueDefinition: 2,
-      territoryWarDefinition: 2,
-      unitGuideDefintion: 2,
-      warDefinition: 2,
-      relicTierDefinition: 3,
-      units: 3,
-      artifactDefinition: 4,
-      artifactTierDefinition: 4,
-      calendarCategoryDefinition: 4,
-      campaign: 4,
-      conquestDefinition: 4,
-      conquestMission: 4,
-      consumableDefinition: 4,
-      consumableType: 4,
-      consumableTierDefinition: 4,
-      dailyLoginRewardDefinition: 4,
-      datacronSet: 4,
-      datacronTemplate: 4,
-      datacronAffixTemplateSet: 4,
-      datacronHelpEntry: 4,
-      recommendedSquad: 4,
-      territoryTournamentDailyRewardTable: 4,
-      unitGuideLayout: 4,
-    }
-    return segments;
-  }
 
   getModSetDefinitions(){
     return {
