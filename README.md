@@ -219,7 +219,7 @@ Indicates returning this month or previous
 `count` _Integer_ | **Optional**\
 The number of results tp return. Default and max is 200.
 
-`event` _String_ | **Required for `types` 2, 4, and 5
+`event` _String_ | **Required for `types` 2, 4, and 5\
 The id of the event to get.
 > RAIDS (2)\
 > `sith_raid` = Sith Triumverate\
