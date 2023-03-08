@@ -6,8 +6,10 @@ Is a Google App Script gs file containing a class that can make interactions wit
 
 #### Versions
 * **ComlinkAPI** - This is a standard class structure and must be copied directly into your project to use. It assumes you will use a hosted Comlink and will utilize swgoh-utils/damedata repo to provide the data files.
-* **ComlinkAPI_v2** - This is the same as above except it is structured in such a way that it can work as a library file. You can use the following Script ID to use it in your sheets: `1k18re5-xluQEBoB_eF4wKvhJKC6DvLWu4woDtTV_vyDttwed02qAjiWA`.
-* **ComlinkAPI_all** - This is a library file that can be used with the binary file version using Comlink for Github, an entirely hosted version, or the above hybrid method. This is still in development.
+* **ComlinkAPI_v2** - This is the same as above except it is structured in such a way that it can work as a library file. You can use the following Script ID to use it in your sheets:\
+`1k18re5-xluQEBoB_eF4wKvhJKC6DvLWu4woDtTV_vyDttwed02qAjiWA`.
+* **ComlinkAPI_GH** - This is a library file that can be used with the binary file version using Comlink for Github, an entirely hosted version, or the above hybrid method. You can use the following Script ID to use it in your sheets:\
+`1IrCE5gHs48rdG7mu8PukkhaXuyqNv8OlszBBtgYRHlqiCmAGbvgQrXXn`
 
 ## Setup
 If wanting it directly in your project to utilize the jsdoc you should create a new script file in your Google App Script project and then copy and paste this ComlinkAPI.gs file into it. This file uses the ES6 so you must set your Google App Script project to utilize the V8 runtime, for instructions on how to do that check [developers.google.com](https://developers.google.com/apps-script/guides/v8-runtime#enabling_the_v8_runtime).
