@@ -54,7 +54,7 @@ const guildData = api.fetchGuildRosters([guildID], false, true)[0];
 ```
 
 ## Methods
-### .fetchPlayer(id, enums, preBuild)
+### .fetchPlayers(id, enums, preBuild)
 <details><summary>Returns the specified player profile from the api. Includes options for return the data with additional details.</summary>
 
 #### Parameters
