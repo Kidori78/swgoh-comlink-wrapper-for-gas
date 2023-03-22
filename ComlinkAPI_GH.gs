@@ -782,8 +782,9 @@ Comlink.prototype.getPayload_ = function(endpoint, id = null, enums = false, opt
  * @param {Boolean} useGithub - Optional: Flag to force the use of the github naming convention
  * @return {String} - The name of the file
  */
-Comlink.prototype.getLangFileName_ = function(language, useGithub=false){
-  if(useGithub || this.usingGithub){
+Comlink.prototype.getLangFileName_ = function(language){
+  var useGithub = false;
+  if(this.usingGithub){
     useGithub = true;
   }
   var langOptions = {
@@ -813,7 +814,7 @@ Comlink.prototype.getLangFileName_ = function(language, useGithub=false){
 Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
   const localization = this.fetchLocalization();
   const divisions = { 5: 5, 10: 4, 15: 3, 20: 2, 25: 1 };
-  const statDefinitions = this.getStatDefinitions();
+  const statDefinitions = getStatDefinitions();
   if(this.gameData === null){ this.gameData = this.fetchData(["for_playerProfile"]); }
   var gameData = this.gameData;
   var isPercentValue = {1: false,5:false,28:false,41:false,42:false, 16: true, 17:true, 18:true, 48:true,49:true,52:true,53:true,54:true,55:true,56:true };
@@ -989,7 +990,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
     //rawPlayerData.rosterUnit[u]["equipped"] = rawPlayerData.rosterUnit[u].equipment.splice(0);
 
     //-->Get Mods
-    let modSet = this.getModSetDefinitions();
+    let modSet = getModSetDefinitions();
     for(let m=0; m < rawPlayerData.rosterUnit[u].equippedStatMod.length;m++){
       let modIndx = modMap[rawPlayerData.rosterUnit[u].equippedStatMod[m].definitionId];
       rawPlayerData.rosterUnit[u].equippedStatMod[m]["slot"] = gameData.statMod[modIndx].slot;
