@@ -5,8 +5,7 @@ Is a Google App Script gs file containing a class that can make interactions wit
 [Google App Script has limitations](https://developers.google.com/apps-script/guides/services/quotas) that the current /localization and /data endpoints exceed. URL Fetch response size has a limit of 50mb which most data segments exceed and localization has to be unzipped and converted into text with .getDataAsString() which has a limit of 100mb which it greatly exceeds. Due to these limitations a few versions of this wrapper have been created.
 
 #### Versions
-* **ComlinkAPI** - This is a standard class structure and must be copied directly into your project to use. It assumes you will use a hosted Comlink and will utilize swgoh-utils/damedata repo to provide the data files.
-* **ComlinkAPI_v2** - This is the same as above except it is structured in such a way that it can work as a library file. You can use the following Script ID to use it in your sheets:\
+* **ComlinkAPI** - This is a library file that assumes you will use a hosted Comlink and will utilize swgoh-utils/damedata repo to provide the data files. You can use the following Script ID to use it in your sheets:\
 `1k18re5-xluQEBoB_eF4wKvhJKC6DvLWu4woDtTV_vyDttwed02qAjiWA`.
 * **ComlinkAPI_GH** - This is a library file that can be used with the binary file version using Comlink for Github, an entirely hosted version, or the above hybrid method. You can use the following Script ID to use it in your sheets:\
 `1IrCE5gHs48rdG7mu8PukkhaXuyqNv8OlszBBtgYRHlqiCmAGbvgQrXXn`
