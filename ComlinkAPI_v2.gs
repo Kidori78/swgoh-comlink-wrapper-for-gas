@@ -827,7 +827,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       skillsList.push({
         id: skill.id,
         name: localization[skill.nameKey],
-        tier: (rosterSkillMap[skill.id]) ? (rosterSkillMap[skill.id] + 2) : 1,
+        tier: (rosterSkillMap[skill.id] !== undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
         maxTier: (skill.tier.length + 1),
         isZeta: skill.isZeta,
         isOmicron: (skill.omicronMode > 1 ) ? true : false,
@@ -856,7 +856,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       skillsList.push({
         id: skill.id,
         name: localization[skill.nameKey],
-        tier: (rosterSkillMap[skill.id]) ? (rosterSkillMap[skill.id] + 2) : 1,
+        tier: (rosterSkillMap[skill.id] !== undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
         maxTier: (skill.tier.length + 1),
         isZeta: skill.isZeta,
         isOmicron: (skill.omicronMode > 1 ) ? true : false,
