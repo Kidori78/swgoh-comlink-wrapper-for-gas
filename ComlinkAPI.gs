@@ -814,12 +814,12 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       let omicron = false;
       for(let t=0; t < skill.tier.length; t++){
         if(skill.tier[t].isZetaTier){
-          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+1)){
+          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+2)){
             zeta = true;
           }
         }
         if(skill.tier[t].isOmicronTier){
-          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+1)){
+          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+2)){
             omicron = true;
           }
         }
@@ -843,12 +843,12 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       let omicron = false;
       for(let t=0; t < skill.tier.length; t++){
         if(skill.tier[t].isZetaTier){
-          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+1)){
+          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+2)){
             zeta = true;
           }
         }
         if(skill.tier[t].isOmicronTier){
-          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+1)){
+          if(rosterSkillMap[skill.id] !== undefined && (rosterSkillMap[skill.id] +2) >= (t+2)){
             omicron = true;
           }
         }
