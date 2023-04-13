@@ -930,6 +930,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
     for(let s=0; s < unit.skillReference.length; s++){
       let skillIndx = skillMap[ unit.skillReference[s].skillId ];
       let skill = gameData.skill[skillIndx];
+      let abIndx = abilityMap[skill.abilityReference];
       let zeta = false;
       let omicron = false;
       for(let t=0; t < skill.tier.length; t++){
@@ -946,7 +947,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       }
       skillsList.push({
         id: skill.id,
-        name: localization[skill.nameKey],
+        name: localization[gameData.ability[abIndx].nameKey],
         tier: (rosterSkillMap[skill.id] !== undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
         maxTier: (skill.tier.length + 1),
         isZeta: skill.isZeta,
@@ -959,6 +960,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
     for(let c=0; c < rawPlayerData.rosterUnit[u].crew.length; c++){
       let skillIndx = skillMap[ rawPlayerData.rosterUnit[u].crew[c].skillId ];
       let skill = gameData.skill[skillIndx];
+      let abIndx = abilityMap[skill.abilityReference];
       let zeta = false;
       let omicron = false;
       for(let t=0; t < skill.tier.length; t++){
@@ -975,7 +977,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       }
       skillsList.push({
         id: skill.id,
-        name: localization[skill.nameKey],
+        name: localization[gameData.ability[abIndx].nameKey],
         tier: (rosterSkillMap[skill.id] !==undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
         maxTier: (skill.tier.length + 1),
         isZeta: skill.isZeta,
