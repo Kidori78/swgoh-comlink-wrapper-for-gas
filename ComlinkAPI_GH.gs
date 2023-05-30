@@ -26,9 +26,10 @@
   * @param {String} accessKey - Optional: The public key required if HMAC has been enabled for Comlink connections
   * @param {String} secretKey - Optional: The private key required if HMAC has been enabled for Comlink connections
   * @param {String} language - Optional: The ISO 639 language code and ISO 3166 country code for the language. Default is "ENG_US"
+  * @param {Integer} rateLimit - Optional: The number of player profiles to get at once. Default is 10, limit is 100.
   * 
 */
-function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US") {
+function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", rateLimit = 10) {
     /**
   */
   // Constructor //
@@ -73,6 +74,7 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US") 
   }
   //-->Other Settings
   this.language = this.getLangFileName_(language);
+  this.rateLimit = rateLimit;
   //-->Maps and data for building units. Eliminates calling fetch each time.
   this.unitMap = null;
   this.categoryMap = null;
@@ -91,14 +93,14 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US") 
  * - NOTE: If using github you must use whichever format you chose to save the file as.
  * @param {Bool} enums - Optional: Flag to return enum values in the response
  * @param {Bool} preBuild - Optional: Flag to return response with additional data that is all localized
- * @param {Integer} limit - Optional: Number of requests to send at once
  * @return {Array} Returns an array of all requested player profile objects in json format
 */
-Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false, limit = 10){
+Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
   var request = [];
   var batches = [];
   var playerData = [];
   var response = [];
+  var limit = this.rateLimit;
   if(this.usingGithub){
     id.forEach(player => {
         request.push(this.requestParameters_(this.github_url + "/player/" + player + ".json","{}","GET"));
@@ -836,7 +838,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
     rawPlayerData.selectedPlayerPortrait["nameKey"] = localization[rawPlayerData.selectedPlayerPortrait.id + "_TITLE"];
   }
   for(var i=0; i < rawPlayerData.profileStat.length; i++){
-    rawPlayerData.profileStat[i].nameKey = localization[rawPlayerData.profileStat[i].nameKey];
+    rawPlayerData.profileStat[i]['name'] = localization[rawPlayerData.profileStat[i].nameKey];
   }
   /* Optional: Localizes all obtained portraits and titles*/
   for(var i=0; i < rawPlayerData.unlockedPlayerPortrait.length; i++){
@@ -855,10 +857,12 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
     rawPlayerData.playerRating.playerRankStatus.divisionId = divisions[rawPlayerData.playerRating.playerRankStatus.divisionId];
   }
   for(let a=0; a < 2; a ++){
-    for(let u=0; u < rawPlayerData.pvpProfile[a].squad.cell.length;u++){
-      let unitIndx = unitMap[rawPlayerData.pvpProfile[a].squad.cell[u].unitDefId];
-      let unit = gameData.units[unitIndx];
-      rawPlayerData.pvpProfile[a].squad.cell[u]["defId"] = unit.baseId;
+    if(rawPlayerData.pvpProfile[a] !== undefined){
+      for(let u=0; u < rawPlayerData.pvpProfile[a].squad.cell.length;u++){
+        let unitIndx = unitMap[rawPlayerData.pvpProfile[a].squad.cell[u].unitDefId];
+        let unit = gameData.units[unitIndx];
+        rawPlayerData.pvpProfile[a].squad.cell[u]["defId"] = unit.baseId;
+      }
     }
   }
 
@@ -876,9 +880,10 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
         let targetName = localization[gameData.category[categoryIndx].descKey];
         rawPlayerData.datacron[i].affix[t]["targetNameKey"] = targetName;
         rawPlayerData.datacron[i].affix[t]["abilityNameKey"] = localization[gameData.ability[abilityIndx].nameKey];
-        rawPlayerData.datacron[i].affix[t]["abilityDescKey"] = localization[gameData.ability[abilityIndx].descKey].replace("{0}",targetName);
+        rawPlayerData.datacron[i].affix[t]["abilityDescKey"] = localization[gameData.ability[abilityIndx].descKey].replace(/\{0\}/g,targetName);
       }else{
         rawPlayerData.datacron[i].affix[t]["targetNameKey"] = localization[statDefinitions[rawPlayerData.datacron[i].affix[t].statType].nameKey]
+        rawPlayerData.datacron[i].affix[t]["statValue"] = rawPlayerData.datacron[i].affix[t]["statValue"] / 1e8;
         rawPlayerData.datacron[i].affix[t]["abilityNameKey"] = "";
         rawPlayerData.datacron[i].affix[t]["abilityDescKey"] = "";
       }
@@ -978,7 +983,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
       skillsList.push({
         id: skill.id,
         name: localization[gameData.ability[abIndx].nameKey],
-        tier: (rosterSkillMap[skill.id] !==undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
+        tier: (rosterSkillMap[skill.id] !== undefined) ? (rosterSkillMap[skill.id] + 2) : 1,
         maxTier: (skill.tier.length + 1),
         isZeta: skill.isZeta,
         isOmicron: (skill.omicronMode > 1 ) ? true : false,
@@ -1500,7 +1505,7 @@ function getStatDefinitions(){
     },
     "48":{
       "statId":48,
-      "nameKey":"UnitStat_OffensePercentAdditive",
+      "nameKey":"ModDetails_OffensePercentAdditive", //"UnitStat_OffensePercentAdditive",
       "descKey":"",
       "isDecimal":true,
       "name":"Offense",
@@ -1508,7 +1513,7 @@ function getStatDefinitions(){
     },
     "49":{
       "statId":49,
-      "nameKey":"UnitStat_DefensePercentAdditive",
+      "nameKey":"ModDetails_DefensePercentAdditive", //"UnitStat_DefensePercentAdditive",
       "descKey":"",
       "isDecimal":true,
       "name":"Defense",
@@ -1556,7 +1561,7 @@ function getStatDefinitions(){
     },
     "55":{
       "statId":55,
-      "nameKey":"UnitStat_MaxHealthPercentAdditive",
+      "nameKey":"ModDetails_MaxHealthPercentAdditive", //"UnitStat_MaxHealthPercentAdditive",
       "descKey":"",
       "isDecimal":true,
       "name":"Health",
@@ -1564,7 +1569,7 @@ function getStatDefinitions(){
     },
     "56":{
       "statId":56,
-      "nameKey":"UnitStat_MaxShieldPercentAdditive",
+      "nameKey":"ModDetails_MaxShieldPercentAdditive", //"UnitStat_MaxShieldPercentAdditive",
       "descKey":"",
       "isDecimal":true,
       "name":"Protection",
