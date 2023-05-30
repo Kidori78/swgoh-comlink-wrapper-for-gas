@@ -49,7 +49,9 @@ const player = api.fetchPlayers[[allyCode],false,true)[0];
 //Get a list of guild profiles
 const guilds = api.fetchGuilds([guildID,guildID]);
 //Get a guild profile, add player profiles to it, and adds additional unit details
-const guildData = api.fetchGuildRosters([guildID], false, true)[0];   
+const guildRoster = api.fetchGuildRosters([guildID], false, true)[0];
+//Get several guild profiles, add player profiles to it, and adds additional unit details
+const guildData = api.fetchGuildRosters([guildID], false, true);
 ```
 
 ## Methods
@@ -65,24 +67,32 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 
 `preBuild` _Bool_ | **Optional**\
 Flag to return response with additional data that is all localized. Default is false.
+  
+`limit` _Integer_ | **Optional**\
+Indicates how many profiles to fetch at once from the api. Default is 10, limit is 100.
 
 ```json
 ```
 </details>
+
 
 ### .fetchGuilds(id, enums)
 <details><summary>Returns a list of specified guild profiles from the api.</summary>
 
 #### Parameters
-`id` _Integer_\
-List of player ally codes, player ids, or guild ids to retrieve data for.
+`id` _Array_\
+List of player ally codes, player ids, or guild ids to retrieve data for. Player Ids require the isPlayerID flag to be true.
 
 `enums` _Bool_ | **Optional**\
 Flag to return enum values in the response. Currently not enabled for Github. If you want the Github data to use enums you must select it in the Command Line Tool when generating the player.json file. Default is false.
 
+`isPlayerID` _Bool_ | **Optional**\
+Flag to indicate that all of the ids being used are player ids. Default is false.
+  
 ```json
 ```
 </details>
+
 
 ### .fetchGuildRosters(id, enums, preBuild)
 <details><summary>Returns a list of specified guild profiles from the api and adds player profiles for each member in the guild.</summary>
@@ -97,9 +107,13 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 `preBuild` _Bool_ | **Optional**\
 Flag to return response with additional data that is all localized. Default is false.
 
-```json
+`isPlayerID` _Bool_ | **Optional**\
+Flag to indicate that all of the ids being used are player ids. Default is false.
+  
+```javascript
 ```
 </details>
+
 
 ### .fetchData(collections, enums)
 <details><summary>Returns the specified game data collections.</summary>
@@ -123,8 +137,10 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 ```
 </details>
 
+
 ### .fetchEvents()
 Returns the current and upcoming events for the game. Does not include guild events or surprise events.
+
 
 ### .fetchGuildByName(name, count, enums)
 <details><summary>Returns a list of guild profiles that contain the specified name in them.</summary>
@@ -139,9 +155,10 @@ The number of results to return.
 `enums` _Bool_ | **Optional**\
 Flag to return enum values in the response. Currently not enabled for Github. If you want the Github data to use enums you must select it in the Command Line Tool when generating the player.json file. Default is false.
 
-```javascript
+```json
 ```
 </details>
+
 
 ### .fetchGuildByCriteria(options,enums)
 <details><summary>Returns a list of guild profiles that match the criteria.</summary>
@@ -162,6 +179,7 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 ```
 </details>
 
+
 ### .fetchGrandArenaBracket(eventID, groupID)
 <details><summary>Returns the specified GAC bracket leaderboard. Can only be retrieved during the event and on returns data for that specific GAC.</summary>
 
@@ -175,6 +193,7 @@ The event id, instance id, league name, and bracket number 0+ separated by :
 ```javascript
 ```
 </details>
+
 
 ### .fetchGrandArenaLeaderboards(league, division, enums)
 <details><summary>Returns the specified Top 50 Grand Arena League and Division Leaderboard.</summary>
@@ -199,6 +218,7 @@ The numeric value for the division.
 ```javascript
 ```
 </details>
+
 
 ### .fetchGuildLeaderboards(type, month, count, event, enums)
 <details><summary>Returns the specified guild leaderboard</summary>
@@ -242,6 +262,7 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 ```
 </details>
 
+
 ### .fetchLocalization(language)
 <details><summary>Returns the game data in the specified language for some values.</summary>
 
@@ -250,12 +271,15 @@ Flag to return enum values in the response. Currently not enabled for Github. If
 The ISO 639 language code and ISO 3166 country code for the language. Default is "ENG_US". The default is to use the language setting setup during initializing the class.
 </details>
 
+
 ### .fetchEnums()
 Returns the enum values in the data which are named values versus integer values.\
 Currently not available for SWGoH Comlink for GitHub users. You would enable the enums in the parameters for it so it saves them to your forked repo.
 
+
 ### .getModSetDefinitions()
 Returns an object with deatils on mod sets. Set names can be localized.
+
 
 ### .getStatDefinitions()
 Returns an object with details on stats.Stat names can be localized.
