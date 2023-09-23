@@ -26,10 +26,10 @@
   * @param {String} accessKey - Optional: The public key required if HMAC has been enabled for Comlink connections
   * @param {String} secretKey - Optional: The private key required if HMAC has been enabled for Comlink connections
   * @param {String} language - Optional: The ISO 639 language code and ISO 3166 country code for the language. Default is "ENG_US"
-  * @param {Integer} rateLimit - Optional: The number of player profiles to get at once. Default is 10, limit is 100.
+  * @param {Integer} rateLimit - Optional: The number of player profiles to get at once. Default is 100, limit is 100.
   * 
 */
-function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", rateLimit = 10) {
+function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", rateLimit = 100) {
     /**
   */
   // Constructor //
@@ -46,7 +46,13 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", 
   this.endpoint_localization ="/localization";
   this.endpoint_enums ="/enums";
   //-->URLs
-  const url =`${host}`;
+  var url
+  if(host.indexOf(",") > -1){
+    this.host = host.split(",");
+    url = this.host[0];
+  }else{
+    url = `${host}`;
+  }
   this.url_player = url + this.endpoint_player;
   this.url_playerArena = url + this.endpoint_playerArena;
   this.url_guild = url + this.endpoint_guild;
@@ -118,9 +124,21 @@ Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
     }
   }
   else {
-    id.forEach(player => {
-        request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)))
-    });
+    if(Array.isArray(this.host)){
+      let maxURLs = this.host.length;
+      let urlX = 0;
+      id.forEach(player => {
+        request.push(this.requestParameters_(this.host[urlX] + this.endpoint_player,this.getPayload_(this.endpoint_player,player,enums)));
+        urlX++;
+        if(urlX >= maxURLs){
+          urlX = 0;
+        }
+      });
+    }else{
+      id.forEach(player => {
+          request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)))
+      });
+    }
     while (request.length > 0) {
       if(limit > request.length){
         limit = request.length;
@@ -285,22 +303,31 @@ Comlink.prototype.fetchGuildRosters = function(id, enums = false, preBuild = fal
     guildData = this.fetchGuilds(guildIds,enums);
 
     //-->Grab member rosters
+    let playerIDs = [];
+    let memberIndex = [];
     for(let g = 0; g < guildData.length;g++){
+      playerIDs = [];
+      memberIndex = [];
       //-->Add player data to member profile
       for(let m = 0; m < guildData[g].member.length; m++){
-        memberData = this.fetchPlayers([guildData[g].member[m].playerId],enums,preBuild)[0];
-        guildData[g].member[m]["localZoneOffsetMinutes"] = memberData.localTimeZoneOffsetMinutes;
-        guildData[g].member[m]["allyCode"] = memberData.allyCode;
-        guildData[g].member[m]["rosterUnit"] = memberData.rosterUnit;
-        guildData[g].member[m]["datacron"] = memberData.datacron;
-        guildData[g].member[m]["pvpProfile"] = memberData.pvpProfile;
-        guildData[g].member[m]["playerRating"] = memberData.playerRating;
-        guildData[g].member[m]["profileStat"] = memberData.profileStat;
-        guildData[g].member[m]["unlockedPlayerTitle"] = memberData.unlockedPlayerTitle;
-        guildData[g].member[m]["unlockedPlayerPortrait"] = memberData.unlockedPlayerPortrait;
-        guildData[g].member[m]["selectedPlayerTitle"] = memberData.selectedPlayerTitle;
-        guildData[g].member[m]["selectedPlayerPortrait"] = memberData.selectedPlayerPortrait;
+        playerIDs.push(guildData[g].member[m].playerId);
+        memberIndex[guildData[g].member[m].playerId] = m;
       }
+      memberData = this.fetchPlayers(playerIDs,false,preBuild);
+      //Build guild data
+      memberData.forEach(member => {
+        guildData[g].member[memberIndex[member.playerId]]["localZoneOffsetMinutes"] = member.localTimeZoneOffsetMinutes;
+        guildData[g].member[memberIndex[member.playerId]]["allyCode"] = member.allyCode;
+        guildData[g].member[memberIndex[member.playerId]]["rosterUnit"] = member.rosterUnit;
+        guildData[g].member[memberIndex[member.playerId]]["datacron"] = member.datacron;
+        guildData[g].member[memberIndex[member.playerId]]["pvpProfile"] = member.pvpProfile;
+        guildData[g].member[memberIndex[member.playerId]]["playerRating"] = member.playerRating;
+        guildData[g].member[memberIndex[member.playerId]]["profileStat"] = member.profileStat;
+        guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerTitle"] = member.unlockedPlayerTitle;
+        guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerPortrait"] = member.unlockedPlayerPortrait;
+        guildData[g].member[memberIndex[member.playerId]]["selectedPlayerTitle"] = member.selectedPlayerTitle;
+        guildData[g].member[memberIndex[member.playerId]]["selectedPlayerPortrait"] = member.selectedPlayerPortrait;
+      });
     }
   }
 
@@ -529,6 +556,24 @@ Comlink.prototype.fetchLocalization = function(language = this.language){
   }
   this.localization = localization;
   return localization;
+}
+
+
+/***********************************************************************************
+ * Attempts to request metadata in order to wake up services that go to sleep
+ */
+Comlink.prototype.wakeUpService = function(){
+  var request = [];
+  var response
+  if(Array.isArray(this.host)){
+    this.host.forEach(url => {
+      request.push(this.requestParameters_(url + this.endpoint_metadata,this.getPayload_(this.endpoint_metadata)));
+    });
+    response = this.fetchAllAPI_(request);
+  } else{
+    response = this.fetchAPI_(this.host + this.endpoint_metadata, this.getPayload_(this.endpoint_metadata), "POST");
+  }
+  return response;
 }
 
 
