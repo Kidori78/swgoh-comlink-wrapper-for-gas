@@ -2,15 +2,20 @@
   * 
   * @Class Comlink
   *
-  * Comlink is a client wrapper for SWGOH Comlink API to make connecting and requesting information from it easier. This version is specifically built for using a hosted Comlink and the swgoh-utils/gamedata
+  * Comlink is a client wrapper for SWGOH Comlink API to make connecting and requesting information from it easier. There are 3 configurations for using this wrapper:
+  * - using a hosted Comlink and the swgoh-utils/gamedata github repo
+  * - using Comlink for Github which puts everything in your own repo
+  * - using swgoh.gg api and the swgoh-utils/gamedata github repo
   *
   * Available Methods
   * - .fetchPlayers()
-  * - .fetchData()
-  * - .fetchEnums()
-  * - .fetchLocalization()
+  * - .fetchPlayerArena()
   * - .fetchGuilds()
   * - .fetchGuildRosters()
+  * - .fetchData()
+  * - .fetchEnums()
+  * - .fetchMetadata()
+  * - .fetchLocalization()
   * - .fetchEvents()
   * - .fetchGuildByName()
   * - .fetchGuildByCriteria()
@@ -45,13 +50,41 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", 
   this.endpoint_metadata ="/metadata";
   this.endpoint_localization ="/localization";
   this.endpoint_enums ="/enums";
+  //-->Security settings
+  this.accessKey = accessKey;
+  this.secretKey = secretKey;
+  this.hmacSignature;
+  this.useHMAC=false;
+  if(this.accessKey !== null && this.secretKey !== null) {
+    this.useHMAC=true;
+  }
   //-->URLs
-    var url
+  this.host = host;
+  this.usingGG = false;
+  this.usingGithub = false;
+  var url
+  this.url_data =`https://raw.githubusercontent.com/swgoh-utils/gamedata/main/`;
   if(host.indexOf(",") > -1){
     this.host = host.split(",");
     url = this.host[0];
+    if(this.accessKey.indexOf(",") > -1){
+      this.accessKey = this.accessKey.split(",");
+    }
+    if(this.secretKey.indexOf(",") > -1){
+      this.secretKey = this.secretKey.split(",");
+    }
   }else{
     url = `${host}`;
+    if(host.indexOf("github") > -1){
+      this.usingGithub = true;
+      this.endpoint_player = "/player/";
+      this.url_data = host + "/data/";
+    }
+    if(host.indexOf("swgoh.gg") > -1){
+      this.usingGG = true;
+      this.endpoint_player = "/player/";
+      this.endpoint_guild = "/guild-profile/";
+    }
   }
   this.url_player = url + this.endpoint_player;
   this.url_playerArena = url + this.endpoint_playerArena;
@@ -62,18 +95,10 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", 
   this.url_getGuildLeaderboard = url + this.endpoint_getGuildLeaderboard;
   this.url_metadata = url + this.endpoint_metadata;
   this.url_enums = url + this.endpoint_enums;
-  this.url_data =`https://raw.githubusercontent.com/swgoh-utils/gamedata/main/`;
-  //-->Security settings
-  this.accessKey = accessKey;
-  this.secretKey = secretKey;
-  this.hmacSignature;
-  this.useHMAC=false;
-  if(this.accessKey !== null && this.secretKey !== null) {
-    this.useHMAC=true;
-  }
   //-->Other Settings
   this.language = this.getLangFileName_(language);
   this.rateLimit = rateLimit;
+
   //-->Maps and data for building units. Eliminates calling fetch each time.
   this.unitMap = null;
   this.categoryMap = null;
@@ -85,6 +110,7 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", 
   this.localization = null;
   this.gameData = null;
 }
+
 
 /************************************************************
  * Returns the specified player profile from the api
@@ -100,11 +126,108 @@ Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
   var playerData = [];
   var response = [];
   var limit = this.rateLimit;
+  if(this.usingGithub || this.usingGG){
+    let url = "";
+    id.forEach(player => {
+        url = (this.usingGithub) ? this.url_player + player + ".json" : this.url_player + player;
+        request.push(this.requestParameters_(url,"{}","GET"));
+    });
+    response = this.fetchAllAPI_(request);
+
+    if(this.usingGG){
+      response.forEach(player => {
+        playerData.push(this.convertPlayerProfile_(player));
+      });
+    } else {
+      if(preBuild){
+        response.forEach(player => {
+          playerData.push(this.getBuiltPlayerData_(player));
+        });
+      } else {
+        response.forEach(player => {
+          playerData.push(player);
+        });
+      }
+    }
+    return playerData;
+  } else {
+    if(Array.isArray(this.host)){
+      let maxURLs = this.host.length;
+      let urlX = 0;
+      let accessKey = this.accessKey;
+      let secretKey = this.secretKey;
+      id.forEach(player => {
+          if(Array.isArray(this.accessKey)){
+            accessKey = this.accessKey[urlX];
+          }
+          if(Array.isArray(this.secretKey)){
+            secretKey = this.secretKey[urlX];
+          }
+        request.push(this.requestParameters_(this.host[urlX] + this.endpoint_player,this.getPayload_(this.endpoint_player,player,enums),"POST",accessKey,secretKey));
+        urlX++;
+        if(urlX >= maxURLs){
+          urlX = 0;
+        }
+      });
+    }else{
+      id.forEach(player =>
+          request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)))
+      );
+    }
+    while (request.length > 0) {
+      if(limit > request.length){
+        limit = request.length;
+      }
+      batches.push(request.splice(0, limit));
+    }
+    batches.forEach(batch => {
+      response.push(this.fetchAllAPI_(batch));
+    });
+    
+    if(preBuild){
+      response.forEach(batch => {
+        batch.forEach(player => { 
+          playerData.push(this.getBuiltPlayerData_(player))
+        });
+      });
+    }else{
+      response.forEach(batch => {
+        batch.forEach(player => {
+          playerData.push(player)
+        });
+      });
+    }
+    return playerData;
+  }
+}
+
+
+/************************************************************
+ * Returns the specified player arena profile from the api
+ * @param {Array} id - The player's allycode or playerId to retrieve data for
+ * @param {Bool} enums - Optional: Flag to return enum values in the response
+ * @param {Bool} preBuild - Optional: Flag to return response with additional data that is all localized
+ * @param {Integer} limit - Optional: Number of requests to send at once
+ * @return {Array} Returns an array of all requested player profile objects in json format
+*/
+Comlink.prototype.fetchPlayerArena = function(id, enums = false, preBuild = false){
+  if(this.usingGithub || this.usingGG){
+    this.fetchPlayers(id, enums, preBuild);
+    return;
+  }
   if(Array.isArray(this.host)){
     let maxURLs = this.host.length;
     let urlX = 0;
+    let accessKey = this.accessKey;
+    let secretKey = this.secretKey;
     id.forEach(player => {
-      request.push(this.requestParameters_(this.host[urlX] + this.endpoint_player,this.getPayload_(this.endpoint_player,player,enums)));
+        if(Array.isArray(this.accessKey)){
+          accessKey = this.accessKey[urlX];
+        }
+        if(Array.isArray(this.secretKey)){
+          secretKey = this.secretKey[urlX];
+        }
+      request.push(this.requestParameters_(this.host[urlX] + this.endpoint_playerArena,this.getPayload_(this.endpoint_playerArena,player,enums),"POST",accessKey,secretKey));
       urlX++;
       if(urlX >= maxURLs){
         urlX = 0;
@@ -112,7 +235,7 @@ Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
     });
   }else{
     id.forEach(player =>
-        request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)))
+        request.push(this.requestParameters_(this.url_playerArena,this.getPayload_(this.endpoint_playerArena, player, enums)))
     );
   }
   while (request.length > 0) {
@@ -128,20 +251,19 @@ Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
   if(preBuild){
     response.forEach(batch => {
       batch.forEach(player => { 
-        playerData.push(this.getBuiltPlayerData_(player))
+        playerData.push(this.getBuiltPlayerData_(player));
       });
     });
-    return playerData;
   }else{
     response.forEach(batch => {
       batch.forEach(player => {
-        playerData.push(player)
+        playerData.push(player);
       });
     });
-    return playerData;
   }
+  return playerData;
 }
-  
+
 
 /************************************************************
  * Returns the specified guild profiles from the api.
@@ -156,28 +278,54 @@ Comlink.prototype.fetchGuilds = function(id, enums = false, isPlayerID = false){
   var response = [];
   var request = [];
   //-->Find guild ids
-  if(isPlayerID || id[0].toString().length < 12){
-    id.forEach(player => {
-      request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)));
+  if(this.usingGithub || this.usingGG){
+    let url = "";
+    if(isPlayerID || id[0].toString().length < 12){
+      id.forEach(player => {
+        url = (this.usingGithub) ? this.url_player + player + "_PROFILE.json" : this.url_player + player;
+        request.push(this.requestParameters_(url, "{}", "GET"));
+      });
+      response = this.fetchAllAPI_(request);
+      response.forEach(player => {
+        guildIds.push(player.data.guild_id);
+      });
+      response = [];
+      request = [];
+    } else {
+      guildIds = id;
+    }
+    guildIds.forEach(guild => {
+      url = (this.usingGithub) ? this.url_guild + guild + "_PROFILE.json" : this.url_guild + guild;
+      request.push(this.requestParameters_(url,"{}","GET"));
     });
     response = this.fetchAllAPI_(request);
-    response.forEach(player => {
-      guildIds.push(player.guildId);
+    response.forEach(guild => {
+      rawData.push((this.usingGithub) ? guild.guild : guild.data);
     });
-    response = [];
-    request = [];
   } else {
-    guildIds = id;
-  }
-  //-->Grab guild data
-  guildIds.forEach(guild => {
-    request.push(this.requestParameters_(this.url_guild,this.getPayload_(this.endpoint_guild, guild, enums)));
-  });
+    if(isPlayerID || id[0].toString().length < 12){
+      id.forEach(player => {
+        request.push(this.requestParameters_(this.url_player,this.getPayload_(this.endpoint_player, player, enums)));
+      });
+      response = this.fetchAllAPI_(request);
+      response.forEach(player => {
+        guildIds.push(player.guildId);
+      });
+      response = [];
+      request = [];
+    } else {
+      guildIds = id;
+    }
+    //-->Grab guild data
+    guildIds.forEach(guild => {
+      request.push(this.requestParameters_(this.url_guild,this.getPayload_(this.endpoint_guild, guild, enums)));
+    });
 
-  response = this.fetchAllAPI_(request);
-  response.forEach(guild => {
-    rawData.push(guild.guild);
-  });
+    response = this.fetchAllAPI_(request);
+    response.forEach(guild => {
+      rawData.push(guild.guild);
+    });
+  }
 
   return rawData;
 }
@@ -195,43 +343,162 @@ Comlink.prototype.fetchGuildRosters = function(id, enums = false, preBuild = fal
   var guildIds = [];
   var guildData = [];
   var memberData = [];
-  //-->Find guild ids
-  if(isPlayerID || id[0].toString().length < 12){
-    this.fetchPlayers(id).forEach(player => {
-      guildIds.push(player.guildId);
+
+  if(this.usingGithub){
+    let memberMap = [];
+    let tempGuild = [];
+    let request = [];
+    let response = [];
+    let mID = "";
+    id.forEach(guild => {
+      try{
+        request = [
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_PROFILE.json","{}","GET"),
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_ROSTER1.json","{}","GET"),
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_ROSTER2.json","{}","GET"),
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_ROSTER3.json","{}","GET"),
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_ROSTER4.json","{}","GET"),
+          this.requestParameters_(this.github_url + "/guild/" + guild + "_ROSTER5.json","{}","GET")
+        ];
+        response = this.fetchAllAPI_(request);
+      }catch(e){
+        //Do nothing
+        console.log(e);
+      }
+      //Form proper object with data
+      tempGuild = response[0].guild;
+      for(var i=1; i < response.length; i++){
+        response[i].forEach(player => {
+          if(preBuild){
+            memberData.push(this.getBuiltPlayerData_(player));
+          } else{
+            memberData.push(player);
+          }
+        });
+      }
+      for(var i=0; i < memberData.length;i++){
+        memberMap[memberData[i].playerId] = i; 
+      }
+      for(var m=0; m < tempGuild.member.length; m++){
+        mID = tempGuild.member[m].playerId;
+        tempGuild.member[m]["localZoneOffsetMinutes"] = memberData[memberMap[mID]].localTimeZoneOffsetMinutes;
+        tempGuild.member[m]["allyCode"] = memberData[memberMap[mID]].allyCode;
+        tempGuild.member[m]["rosterUnit"] = memberData[memberMap[mID]].rosterUnit;
+        tempGuild.member[m]["datacron"] = memberData[memberMap[mID]].datacron;
+        tempGuild.member[m]["pvpProfile"] = memberData[memberMap[mID]].pvpProfile;
+        tempGuild.member[m]["playerRating"] = memberData[memberMap[mID]].playerRating;
+        tempGuild.member[m]["profileStat"] = memberData[memberMap[mID]].profileStat;
+        tempGuild.member[m]["unlockedPlayerTitle"] = memberData[memberMap[mID]].unlockedPlayerTitle;
+        tempGuild.member[m]["unlockedPlayerPortrait"] = memberData[memberMap[mID]].unlockedPlayerPortrait;
+        tempGuild.member[m]["selectedPlayerTitle"] = memberData[memberMap[mID]].selectedPlayerTitle;
+        tempGuild.member[m]["selectedPlayerPortrait"] = memberData[memberMap[mID]].selectedPlayerPortrait;
+      }
+      guildData.push(tempGuild);
+      memberData = [];
+      memberMap = [];
+      tempGuild = [];
     });
   } else {
-    guildIds = id;
-  }
-  //-->Grab guild data
-  guildData = this.fetchGuilds(guildIds,enums);
-
-  //-->Grab member rosters
-  let playerIDs = [];
-  let memberIndex = [];
-  for(let g = 0; g < guildData.length;g++){
-    playerIDs = [];
-    memberIndex = [];
-    //-->Add player data to member profile
-    for(let m = 0; m < guildData[g].member.length; m++){
-      playerIDs.push(guildData[g].member[m].playerId);
-      memberIndex[guildData[g].member[m].playerId] = m;
+    //-->Find guild ids
+    if(isPlayerID || id[0].toString().length < 12){
+      this.fetchPlayers(id).forEach(player => {
+        guildIds.push(player.guildId);
+      });
+    } else {
+      guildIds = id;
     }
-    memberData = this.fetchPlayers(playerIDs,false,preBuild);
-    //Build guild data
-    memberData.forEach(member => {
-      guildData[g].member[memberIndex[member.playerId]]["localZoneOffsetMinutes"] = member.localTimeZoneOffsetMinutes;
-      guildData[g].member[memberIndex[member.playerId]]["allyCode"] = member.allyCode;
-      guildData[g].member[memberIndex[member.playerId]]["rosterUnit"] = member.rosterUnit;
-      guildData[g].member[memberIndex[member.playerId]]["datacron"] = member.datacron;
-      guildData[g].member[memberIndex[member.playerId]]["pvpProfile"] = member.pvpProfile;
-      guildData[g].member[memberIndex[member.playerId]]["playerRating"] = member.playerRating;
-      guildData[g].member[memberIndex[member.playerId]]["profileStat"] = member.profileStat;
-      guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerTitle"] = member.unlockedPlayerTitle;
-      guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerPortrait"] = member.unlockedPlayerPortrait;
-      guildData[g].member[memberIndex[member.playerId]]["selectedPlayerTitle"] = member.selectedPlayerTitle;
-      guildData[g].member[memberIndex[member.playerId]]["selectedPlayerPortrait"] = member.selectedPlayerPortrait;
-    });
+    //-->Grab guild data
+    guildData = this.fetchGuilds(guildIds,enums);
+
+    //-->Grab member rosters
+    let playerIDs = [];
+    let memberIndex = [];
+    if(this.usingGG){
+      for(let g = 0; g < guildData.length;g++){
+        playerIDs = [];
+        memberIndex = [];
+        //-->Add player data to member profile
+        for(let m = 0; m < guildData[g].members.length; m++){
+          if(guildData[g].members[m].ally_code !== null){
+            playerIDs.push(guildData[g].members[m].ally_code);
+            memberIndex[guildData[g].members[m].ally_code] = m;
+          }else{
+            console.log("Need to register on swgoh.gg: "+guildData[g].members[m].name);
+          }
+        }
+        memberData = this.fetchPlayers(playerIDs,false,false);
+        //Build guild data
+        guildData[g]["profile"] = {
+          "id": guildData[g].guild_id,
+          "name": guildData[g].name,
+          "externalMessageKey": guildData[g].external_message,
+          "enrollmentStatus": guildData[g].enrollment_status,
+          "memberCount": guildData[g].member_count,
+          "memberMax": 50,
+          "levelRequirement": guildData[g].level_requirement,
+          "guildType": guildData[g].guild_type,
+          "guildEventTracker": []
+        };
+        guildData[g]["nextChallengesRefresh"] = "";
+        guildData[g]["recentRaidResult"] = [];
+        guildData[g]["recentTerritoryWarResult"] = [];
+        guildData[g]["member"] = guildData[g].members.splice(0);
+        //Adjust member data
+        memberData.forEach(member => {
+          guildData[g].member[memberIndex[member.allyCode]]["localZoneOffsetMinutes"] = "";  //GGdoesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["allyCode"] = member.allyCode;
+          guildData[g].member[memberIndex[member.allyCode]]["rosterUnit"] = member.rosterUnit;
+          guildData[g].member[memberIndex[member.allyCode]]["datacron"] = member.datacron;
+          guildData[g].member[memberIndex[member.allyCode]]["pvpProfile"] = member.pvpProfile;
+          guildData[g].member[memberIndex[member.allyCode]]["playerRating"] = member.playerRating;
+          guildData[g].member[memberIndex[member.allyCode]]["profileStat"] = member.profileStat;
+          guildData[g].member[memberIndex[member.allyCode]]["unlockedPlayerTitle"] = []; //GG doesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["unlockedPlayerPortrait"] = [];
+          guildData[g].member[memberIndex[member.allyCode]]["selectedPlayerTitle"] = {};
+          guildData[g].member[memberIndex[member.allyCode]]["selectedPlayerPortrait"] = {};
+          guildData[g].member[memberIndex[member.allyCode]]["seasonStatus"] = [];  //GG doesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["memberContribution"] = [];  //GG doesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["playerName"] = member.name;
+          guildData[g].member[memberIndex[member.allyCode]]["playerLevel"] = member.level;
+          guildData[g].member[memberIndex[member.allyCode]]["playerId"] = "";  //GG doesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["lastActivityTime"] =  "";  //GG doesn't provide this
+          guildData[g].member[memberIndex[member.allyCode]]["guildJoinTime"] = (new Date(guildData[g].member[memberIndex[member.allyCode]]["guild_join_time"].replace("-","/").replace("T"," ")).getTime() / 1000).toString();
+          guildData[g].member[memberIndex[member.allyCode]]["memberLevel"] = guildData[g].member[memberIndex[member.allyCode]].member_level;
+          guildData[g].member[memberIndex[member.allyCode]]["galacticPower"] = guildData[g].member[memberIndex[member.allyCode]].galactic_power;
+          guildData[g].member[memberIndex[member.allyCode]]["shipGalacticPower"] = "";
+          guildData[g].member[memberIndex[member.allyCode]]["characterGalacticPower"] = "";
+          guildData[g].member[memberIndex[member.allyCode]]["leagueId"] = guildData[g].member[memberIndex[member.allyCode]].league_id;
+          guildData[g].member[memberIndex[member.allyCode]]["lifetimeSeasonScore"] = guildData[g].member[memberIndex[member.allyCode]].lifetime_season_score;
+          guildData[g].member[memberIndex[member.allyCode]]["playerTitle"] = guildData[g].member[memberIndex[member.allyCode]].title;
+        });
+      }
+
+    }else{
+      for(let g = 0; g < guildData.length;g++){
+        playerIDs = [];
+        memberIndex = [];
+        //-->Add player data to member profile
+        for(let m = 0; m < guildData[g].member.length; m++){
+          playerIDs.push(guildData[g].member[m].playerId);
+          memberIndex[guildData[g].member[m].playerId] = m;
+        }
+        memberData = this.fetchPlayers(playerIDs,false,preBuild);
+        //Build guild data
+        memberData.forEach(member => {
+          guildData[g].member[memberIndex[member.playerId]]["localZoneOffsetMinutes"] = member.localTimeZoneOffsetMinutes;
+          guildData[g].member[memberIndex[member.playerId]]["allyCode"] = member.allyCode;
+          guildData[g].member[memberIndex[member.playerId]]["rosterUnit"] = member.rosterUnit;
+          guildData[g].member[memberIndex[member.playerId]]["datacron"] = member.datacron;
+          guildData[g].member[memberIndex[member.playerId]]["pvpProfile"] = member.pvpProfile;
+          guildData[g].member[memberIndex[member.playerId]]["playerRating"] = member.playerRating;
+          guildData[g].member[memberIndex[member.playerId]]["profileStat"] = member.profileStat;
+          guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerTitle"] = member.unlockedPlayerTitle;
+          guildData[g].member[memberIndex[member.playerId]]["unlockedPlayerPortrait"] = member.unlockedPlayerPortrait;
+          guildData[g].member[memberIndex[member.playerId]]["selectedPlayerTitle"] = member.selectedPlayerTitle;
+          guildData[g].member[memberIndex[member.playerId]]["selectedPlayerPortrait"] = member.selectedPlayerPortrait;
+        });
+      }
+    }
   }
 
   return guildData;
@@ -433,6 +700,14 @@ Comlink.prototype.fetchEnums = function(){
 
 
 /************************************************************
+ * Returns the enums used for the game data
+*/
+Comlink.prototype.fetchMetadata = function(){
+  return this.fetchAPI_(this.url_metadata, this.getPayload_(this.endpoint_metadata), "POST");
+}
+
+
+/************************************************************
  * Returns the localization for the game data
  * @param {String} language - The ISO 639 language code and ISO 3166 country code for the language. Default is "ENG_US" 
 */
@@ -452,9 +727,17 @@ Comlink.prototype.wakeUpService = function(){
   var request = [];
   var response
   if(Array.isArray(this.host)){
-    this.host.forEach(url => {
-      request.push(this.requestParameters_(url + this.endpoint_metadata,this.getPayload_(this.endpoint_metadata)));
-    });
+    var accessKey = this.accessKey;
+    var secretKey = this.secretKey;
+    for(let i=0; i < this.host.length; i++){
+      if(Array.isArray(this.accessKey)){
+        accessKey = this.accessKey[i];
+      }
+      if(Array.isArray(this.secretKey)){
+        secretKey = this.secretKey[i];
+      }
+      request.push(this.requestParameters_(this.host[i] + this.endpoint_metadata,this.getPayload_(this.endpoint_metadata),"POST",accessKey,secretKey));
+    }
     response = this.fetchAllAPI_(request);
   } else{
     response = this.fetchAPI_(this.host + this.endpoint_metadata, this.getPayload_(this.endpoint_metadata), "POST");
@@ -492,16 +775,30 @@ Comlink.prototype.fetchAPI_ = function(url,payload, methodType = "POST") {
     parameters.headers["Accept-Encoding"] = "gzip, deflate";
   }
   //--> Try the request multiple times
-  var msg
+  var msg, response
   for(var tries = 1; tries < 4;tries++){
-    let response = UrlFetchApp.fetch(url,parameters);
-    /* Check for errors */
-    if(response.getResponseCode()==200) {
-      return JSON.parse(response.getContentText());
-    } else {
-      msg = response.getResponseCode()+' : There was a problem with your request to the API. Please verify your information and try again.\n\nResponse Message:\n'+response.getContentText();
-      Logger.log(msg);
+    try{
+      response = UrlFetchApp.fetch(url,parameters);
+      break;
+    } catch(error) {
+      if(tries === 3){
+        throw new Error(error);
+      }
+      switch(tries){
+        case 2:
+          Utilities.sleep(2000);
+          break;
+        default:
+          Utilities.sleep(1000);
+      }
     }
+  }
+  /* Check for errors */
+  if(response.getResponseCode()==200) {
+    return JSON.parse(response.getContentText());
+  } else {
+    msg = response.getResponseCode()+' : There was a problem with your request to the API. Please verify your information and try again.\n\nResponse Message:\n'+response.getContentText();
+    Logger.log(msg);
   }
   throw new Error(msg);
 }
@@ -513,7 +810,24 @@ Comlink.prototype.fetchAPI_ = function(url,payload, methodType = "POST") {
 */
 /* NOTE: This function does not appear to speed up the time taken to retrieve the data. */
 Comlink.prototype.fetchAllAPI_ = function(payload = []){
-  var response = UrlFetchApp.fetchAll(payload);
+  var response
+  for(let tries=1; tries < 4; tries++){
+    try{
+      response = UrlFetchApp.fetchAll(payload);
+      break;
+    } catch(error) {
+      if(tries === 3){
+        throw new Error(error);
+      }
+      switch(tries){
+        case 2:
+          Utilities.sleep(2000);
+          break;
+        default:
+          Utilities.sleep(1000);
+      }      
+    }  
+  }
   var requested = [];
   /* Check for errors */
   var msg
@@ -532,7 +846,7 @@ Comlink.prototype.fetchAllAPI_ = function(payload = []){
  * Returns payload and parameters, used for creating fetchAll payloads.
  * @return {array} parameters - The request as an object
 */
-Comlink.prototype.requestParameters_ = function(url, payload, methodType = "POST"){
+Comlink.prototype.requestParameters_ = function(url, payload, methodType = "POST", accessKey = null, secretKey = null){
   let endpoint = url.substring(url.lastIndexOf("/"),url.length);
   let postHeader={};
   let parameters = {
@@ -541,11 +855,13 @@ Comlink.prototype.requestParameters_ = function(url, payload, methodType = "POST
     contentType: 'application/json',
     muteHttpExceptions: true
   };
+  accessKey = (accessKey === null) ? this.accessKey : accessKey;
+  secretKey = (secretKey === null) ? this.secretKey : secretKey;
   if(this.useHMAC && endpoint !== this.endpoint_enums && methodType !== "GET") {
     let requestTime = new Date().getTime().toString();
-    this.getHMAC_(endpoint,payload,requestTime);
+    this.getHMAC_(endpoint,payload,requestTime,secretKey);
     postHeader={
-      'Authorization': `HMAC-SHA256 Credential=${this.accessKey},Signature=${this.hmacSignature}`,
+      'Authorization': `HMAC-SHA256 Credential=${accessKey},Signature=${this.hmacSignature}`,
       'X-Date': requestTime
     };
   }
@@ -563,16 +879,17 @@ Comlink.prototype.requestParameters_ = function(url, payload, methodType = "POST
 * @payload {Object} payload - The request data as an object literal
 * @payload {String} reqTime - The current time in Unix Epoch Time
 */
-Comlink.prototype.getHMAC_ = function(endpoint,payload="{}",reqTime) {
+Comlink.prototype.getHMAC_ = function(endpoint,payload="{}",reqTime, secretKey = null) {
   var fields=[];
   fields.push(reqTime);
   fields.push("POST");
   fields.push(endpoint);
 
+  secretKey = (secretKey === null) ? this.secretKey : secretKey;
   var bodyByte=Utilities.computeDigest(Utilities.DigestAlgorithm.MD5,JSON.stringify(payload));
   var bodyMessage=byteToString(bodyByte);
   fields.push(bodyMessage);
-  var byteSignature=Utilities.computeHmacSha256Signature(fields.join(''),this.secretKey);
+  var byteSignature=Utilities.computeHmacSha256Signature(fields.join(''),secretKey);
   this.hmacSignature=byteToString(byteSignature);
   return;
 
@@ -737,7 +1054,7 @@ Comlink.prototype.getLangFileName_ = function(language){
 
 
 /***************************************************************************
- * Returns an object with the segment location for each collection
+ * Modifies the player object to standardize the structure and keys
  * @param {Object} rawData - The raw player profile
  */
 Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
@@ -963,6 +1280,306 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
   //rawPlayerData.rosterUnit = null;
   return rawPlayerData;
 }
+
+
+/***************************************************************************
+ * Modifies the player object to standardize structure and keys
+ * @param {Object} rawData - The raw player profile
+ */
+Comlink.prototype.convertPlayerProfile_ = function(rawPlayerData){
+  //Build initial object
+  var newPlayerData = {
+    "rosterUnit": [],
+    "datacron": [],
+    "seasonStatus": [],  //GG doesn't provide this
+    "pvpProfile": [
+      {
+        tab: 1, //Squad
+        rank: (rawPlayerData.data.arena === null) ? "" : rawPlayerData.data.arena.rank
+      },
+      {
+        tab: 2, //Fleet
+        rank: (rawPlayerData.data.fleet_arena === null) ? "" : rawPlayerData.data.fleet_arena.rank
+      }
+    ],
+    "profileStat": [
+      {
+        "nameKey": "STAT_GALACTIC_POWER_ACQUIRED_NAME",
+        value: rawPlayerData.data.galactic_power,
+        "name": "Galactic Power:"
+      },
+      {
+        "nameKey": "STAT_CHARACTER_GALACTIC_POWER_ACQUIRED_NAME",
+        "value": rawPlayerData.data.character_galactic_power,
+        "name": "Galactic Power (Characters):"
+      },
+      {
+        "nameKey": "STAT_SHIP_GALACTIC_POWER_ACQUIRED_NAME",
+        "value": rawPlayerData.data.ship_galactic_power,
+        "name": "Galactic Power (Ships):"
+      },
+      {
+        "nameKey": "STAT_PVP_SHIP_BATTLES_WIN_NAME",
+        "value": rawPlayerData.data.ship_battles_won,
+        "name": "Fleet Arena Battles Won:"
+      },
+      {
+        "nameKey": "STAT_PVP_BATTLES_WIN_NAME_TU07_2",
+        "value": rawPlayerData.data.pvp_battles_won,
+        "name": "Squad Arena Battles Won:"
+      },
+      {
+        "nameKey": "STAT_TOTAL_GALACTIC_WON_NAME_TU07_2",
+        "value": rawPlayerData.data.galactic_war_won,
+        "name": "Galactic War Battles Won:"
+      },
+      {
+        "nameKey": "STAT_PVE_BATTLES_WIN_NAME_TU15",
+        "value": rawPlayerData.data.pve_battles_won,
+        "name": "Total Battles Won:"
+      },
+      {
+        "nameKey": "STAT_PVE_HARD_BATTLES_WIN_NAME_TU07_2",
+        "value": rawPlayerData.data.pve_hard_won,
+        "name": "Hard Battles Won:"
+      },
+      {
+        "nameKey": "STAT_GUILD_RAID_WON_NAME_TU07_2",
+        value: rawPlayerData.data.guild_raid_won,
+        "name": "Guild Raids Won:"
+      },
+      {
+        "nameKey": "STAT_TOTAL_GUILD_CONTRIBUTION_NAME_TU07_2",
+        "value": rawPlayerData.data.guild_contribution,
+        "name": "Guild Tokens Earned:"
+      },
+      {
+        "nameKey": "STAT_TOTAL_GUILD_EXCHANGE_DONATIONS_TU07_2",
+        "value": rawPlayerData.data.guild_exchange_donations,
+        "name": "Gear Donated in Guild Exchange:"
+      },
+      {
+        "nameKey": "STAT_SEASON_SUCCESSFUL_DEFENDS_NAME",
+        "value": rawPlayerData.data.season_successful_defends,
+        "name": "Championship Successful Battle Defends:"
+      },
+      {
+        "nameKey": "STAT_SEASON_FULL_CLEAR_ROUND_WINS_NAME",
+        "value": rawPlayerData.data.season_full_clears,
+        "name": "Championship Full Rounds Cleared:"
+      },
+      {
+        "nameKey": "STAT_SEASON_LEAGUE_SCORE_NAME",
+        "value": rawPlayerData.data.season_league_score,
+        "name": "Lifetime Championship Score:"
+      },
+      {
+        "nameKey": "STAT_SEASON_UNDERSIZED_SQUAD_WINS_NAME",
+        "value": rawPlayerData.data.season_undersized_squad_wins,
+        "name": "Championship Undersized Squad Battles Won:"
+      },
+      {
+        "nameKey": "STAT_SEASON_PROMOTIONS_EARNED_NAME",
+        "value": rawPlayerData.data.season_promotions_earned,
+        "name": "Championship Promotions Earned:"
+      },
+      {
+        "nameKey": "STAT_SEASON_BANNERS_EARNED_NAME",
+        "value": rawPlayerData.data.season_banners_earned,
+        "name": "Championship Banners Earned:"
+      },
+      {
+        "nameKey": "STAT_SEASON_OFFENSIVE_BATTLES_WON_NAME",
+        "value": rawPlayerData.data.season_offensive_battles_won,
+        "name": "Championship Offensive Battles Won:"
+      },
+      {
+        "nameKey": "STAT_SEASON_TERRITORIES_DEFEATED_NAME",
+        "value": rawPlayerData.data.season_territories_defeated,
+        "name": "Championship Territories Defeated:"
+      }
+    ],
+    "playerRating": {
+      "playerSkillRating": {
+        "skillRating": (rawPlayerData.data.skill_rating === null) ? "" : rawPlayerData.data.skill_rating
+      },
+      "playerRankStatus": {
+        "leagueId": (rawPlayerData.data.league_name === null) ? "" : rawPlayerData.data.league_name,
+        "divisionId": (rawPlayerData.data.division_number === null) ? "" : rawPlayerData.data.division_number
+      }
+    },
+    "name": rawPlayerData.data.name,
+    "level": rawPlayerData.data.level,
+    "allyCode": rawPlayerData.data.ally_code,
+    "playerId": "",  //GG doesn't provide this
+    "guildId": rawPlayerData.data.guild_id,
+    "guildName": rawPlayerData.data.guild_name,
+    "lastActivityTime": ""  //GG doesn't provide this
+  }
+
+  //Build Datacron data
+  if(rawPlayerData.datacrons.length > 0){
+    let datacronNames
+    if(this.datacronMap === null){
+      let datacronSetData = this.fetchAPI_("https://swgoh.gg/api/datacron-sets/","{}","GET");
+      datacronNames = [];
+      datacronSetData.forEach(cron => {
+        datacronNames[cron.id] = cron.display_name;
+      });
+      this.datacronMap = datacronNames;
+      if(this.gameData === null){
+        this.gameData = { "datacrons": datacronSetData };
+      } else if(!this.gameData.hasOwnProperty("datacrons")){
+        this.gameData["datacrons"] = datacronSetData;
+      }
+
+    } else {
+      datacronNames = this.datacronMap;
+    }
+    let targetList
+    rawPlayerData.datacrons.forEach(cron => {
+      targetList = [];
+      cron.tiers.forEach(tier => {
+        targetList.push(tier.scope_target_name);
+      });
+      targetList = targetList.toString();
+      newPlayerData.datacron.push({
+        "id": cron.id,
+        "setId": cron.set_id,
+        "templateId": cron.template_base_id,
+        "locked": cron.locked,
+        "rerollIndex": cron.reroll_index,
+        "rerollCount": cron.reroll_count,
+        "setName": datacronNames[cron.set_id],
+        "maxTier": cron.tier,
+        "targetList": targetList,
+        "affix": cron.tiers.map(tier => {
+          return {
+            "targetRule": tier.target_rule_id,
+            "abilityId": tier.ability_id,
+            "statType": tier.stat_type,
+            "statValue": tier.stat_value,
+            "requiredUnitTier": tier.required_unit_tier,
+            "requiredRelicTier": tier.required_relic_tier,
+            "targetNameKey": tier.scope_target_name,
+            "abilityNameKey": "", //GG doesn't have this or need it
+            "abilityDescKey": tier.ability_description
+          }
+        })
+      });
+    });
+  }
+
+  //Build roster
+  //Get unit data
+  let unitMap, abilityMap
+  if(this.unitMap === null){
+    let unitData = this.fetchAPI_("https://swgoh.gg/api/units/","{}","GET");
+    unitMap = [];
+    for(let i=0; i < unitData.data.length; i++){
+      unitMap[unitData.data[i].base_id] = i;
+    }    
+    this.unitMap = unitMap;
+    if(this.gameData === null){
+      this.gameData = { "units": unitData.data };
+    } else if(!this.gameData.hasOwnProperty("units")){
+      this.gameData["units"] = unitData.data;
+    }
+  } else {
+    unitMap = this.unitMap;
+  }
+  //Get ability data
+  if(this.abilityMap === null){
+    let abilityData = this.fetchAPI_("https://swgoh.gg/api/abilities/","{}","GET");
+    abilityMap = [];
+    for(let i=0; i < abilityData.length; i++){
+      abilityMap[abilityData[i].base_id] = i;
+    }    
+    this.abilityMap = abilityMap;
+    if(this.gameData === null){
+      this.gameData = { "ability": abilityData };
+    } else if(!this.gameData.hasOwnProperty("ability")){
+      this.gameData["ability"] = abilityData;
+    }
+  } else {
+    abilityMap = this.abilityMap;
+  }
+  //Build mod data to units
+  let modData = [];
+  let flatValues = {1: true,5:true,28:true,41:true,42:true};
+  rawPlayerData.mods.forEach(mod => {
+    if(!modData.hasOwnProperty(mod.character)){ 
+      modData[mod.character] = [];
+    }
+    modData[mod.character].push({
+      "id": mod.id,
+      "level": mod.level,
+      "tier": mod.tier,
+      "pips": mod.rarity,
+      "set": mod["set"],
+      "slot": (mod.slot + 1),
+      "primaryStat": {
+        "unitStat": mod.primary_stat.stat_id,
+        "value": (flatValues[mod.primary_stat.stat_id]) ? mod.primary_stat.value / 10000 : mod.primary_stat.value / 100
+      },
+      "secondaryStat": mod.secondary_stats.map(function(ss) {
+        return {
+          "unitStat": ss.stat_id,
+          "value": (flatValues[ss.stat_id]) ? ss.value / 10000 : ss.value / 100,
+          "roll": ss.roll,
+          "rollValues": ss.stat_rolls
+        }
+      })
+    });
+  });
+
+  rawPlayerData.units.forEach(unit => {    
+    newPlayerData.rosterUnit.push({
+      "baseId": unit.data.base_id,
+      "defId": unit.data.base_id,
+      "name": unit.data.name,
+      "alignment": this.gameData.units[unitMap[unit.data.base_id]].alignment,
+      "rarity": unit.data.rarity,
+      "currentRarity": unit.data.rarity,
+      "level": unit.data.level,
+      "currentLevel": unit.data.level,
+      "gear": unit.data.gear_level,
+      "currentTier": unit.data.gear_level,
+      "relic": (unit.data.combat_type === 1) ? { currentTier: unit.data.relic_tier} : null,
+      "isGalacticLegend": unit.data.is_galactic_legend,
+      "combatType": unit.data.combat_type,
+      "crew": (unit.data.combat_type === 2) ? this.gameData.units[unitMap[unit.data.base_id]].crew_base_ids.map(function(crew){
+        return {
+          "unitId": crew
+        }
+      }) : [],
+      "purchasedAbilityId": (unit.data.has_ultimate) ? [ ("ultimateability_" + unit.data.base_id)] : [],
+      "equipment": unit.data.gear.filter(gear => gear.is_obtained).map(function(gear){
+        return {
+          "slot": gear.slot,
+          "equipmentId": gear.base_id
+        }
+      }),
+      "categories": this.gameData.units[unitMap[unit.data.base_id]].categories,
+      "skills": unit.data.ability_data.map(skill => {
+        return {
+          "id": skill.id,
+          "name": skill.name,
+          "tier": skill.ability_tier,
+          "maxTier": skill.tier_max,
+          "isZeta": skill.is_zeta,
+          "isOmicron": skill.is_omicron,
+          "omicronArea": this.gameData["ability"][abilityMap[skill.id]].omicron_mode,
+          "hasZeta": skill.has_zeta_learned,
+          "hasOmicron": skill.has_omicron_learned
+        }
+      }),
+      "mods": modData[unit.data.base_id] || []
+    });
+  });
+  return newPlayerData;
+}
+
 
 /*************************************************** 
  * Returns map of the designated data
