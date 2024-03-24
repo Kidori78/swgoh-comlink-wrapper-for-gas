@@ -5,10 +5,8 @@ Is a Google App Script gs file containing a class that can make interactions wit
 [Google App Script has limitations](https://developers.google.com/apps-script/guides/services/quotas) that the current /localization and /data endpoints exceed. URL Fetch response size has a limit of 50mb which most data segments exceed and localization has to be unzipped and converted into text with .getDataAsString() which has a limit of 100mb which it greatly exceeds. Due to these limitations a few versions of this wrapper have been created.
 
 #### Versions
-* **ComlinkAPI** - This is a library file that assumes you will use a hosted Comlink and will utilize swgoh-utils/damedata repo to provide the data files. You can use the following Script ID to use it in your sheets:\
+* **ComlinkAPI** - This is a library file accepts a hosted Comlink url, Comlink for Github or the swgoh.gg api url and will utilize swgoh-utils/damedata repo to provide the data files. You can use the following Script ID to use it in your sheets:\
 `1k18re5-xluQEBoB_eF4wKvhJKC6DvLWu4woDtTV_vyDttwed02qAjiWA`.
-* **ComlinkAPI_GH** - This is a library file that can be used with the binary file version using Comlink for Github, an entirely hosted version, or the above hybrid method. You can use the following Script ID to use it in your sheets:\
-`1IrCE5gHs48rdG7mu8PukkhaXuyqNv8OlszBBtgYRHlqiCmAGbvgQrXXn`
 
 ## Setup
 If wanting it directly in your project to utilize the jsdoc you should create a new script file in your Google App Script project and then copy and paste this ComlinkAPI.gs file into it. This file uses the ES6 so you must set your Google App Script project to utilize the V8 runtime, for instructions on how to do that check [developers.google.com](https://developers.google.com/apps-script/guides/v8-runtime#enabling_the_v8_runtime).
