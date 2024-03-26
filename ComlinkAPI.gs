@@ -423,7 +423,7 @@ Comlink.prototype.fetchGuildRosters = function(id, enums = false, preBuild = fal
             playerIDs.push(guildData[g].members[m].ally_code);
             memberIndex[guildData[g].members[m].ally_code] = m;
           }else{
-            console.log("Need to register on swgoh.gg: "+guildData[g].members[m].name);
+            console.log("Need to register on swgoh.gg: "+guildData[g].members[m].player_name);
           }
         }
         memberData = this.fetchPlayers(playerIDs,false,false);
