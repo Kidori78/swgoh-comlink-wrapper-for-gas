@@ -539,13 +539,13 @@ Comlink.prototype.fetchData = function(collections = []){
           tempColl = ["artifactDefinition","artifactTierDefinition","conquestDefinition","conquestMission","consumableDefinition", "consumableTierDefinition","consumableType"];
           break;
         case "for_abilities":
-          tempColl = ["ability","recipe","skill","units"];
+          tempColl = ["ability","recipe","skill","units_gas"];
           break;
         case "for_territoryBattles":
-          tempColl = ["campaign","mysteryBox","equipment","material","table","territoryBattleDefinition","ability","units","category"];
+          tempColl = ["campaign","mysteryBox","equipment","material","table","territoryBattleDefinition","ability","units_gas","category"];
           break;
         case "for_playerProfile":
-          tempColl = ["units","category","skill","statMod","battleTargetingRule", "datacronSet","ability"];
+          tempColl = ["units_gas","category","skill","statMod","battleTargetingRule", "datacronSet","ability"];
           break;
         case "for_datacrons":
           tempColl = ["datacronSet","datacronTemplate","datacronAffixTemplateSet"];
@@ -570,6 +570,7 @@ Comlink.prototype.fetchData = function(collections = []){
   //-->Fetch all of the data from the api  
   for(const col in getCollections){    
     request.push(this.requestParameters_(this.url_data + col + ".json", "{}", "GET"));
+    if(col === "units_gas") { col = "units"};
     dataOrder.push(col);   
   }
   let response = this.fetchAllAPI_(request);
