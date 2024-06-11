@@ -568,7 +568,8 @@ Comlink.prototype.fetchData = function(collections = []){
   });
 
   //-->Fetch all of the data from the api  
-  for(const col in getCollections){    
+  for(let col in getCollections){
+    if(col === "units") { col = "units_gas"};
     request.push(this.requestParameters_(this.url_data + col + ".json", "{}", "GET"));
     if(col === "units_gas") { col = "units"};
     dataOrder.push(col);   
