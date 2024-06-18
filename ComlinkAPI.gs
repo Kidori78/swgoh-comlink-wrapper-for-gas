@@ -442,34 +442,36 @@ Comlink.prototype.fetchGuildRosters = function(id, enums = false, preBuild = fal
         guildData[g]["nextChallengesRefresh"] = "";
         guildData[g]["recentRaidResult"] = [];
         guildData[g]["recentTerritoryWarResult"] = [];
-        guildData[g]["member"] = guildData[g].members.splice(0);
+        guildData[g]["member"] = [];
         //Adjust member data
         memberData.forEach(member => {
-          guildData[g].member[memberIndex[member.allyCode]]["localZoneOffsetMinutes"] = "";  //GGdoesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["allyCode"] = member.allyCode;
-          guildData[g].member[memberIndex[member.allyCode]]["rosterUnit"] = member.rosterUnit;
-          guildData[g].member[memberIndex[member.allyCode]]["datacron"] = member.datacron;
-          guildData[g].member[memberIndex[member.allyCode]]["pvpProfile"] = member.pvpProfile;
-          guildData[g].member[memberIndex[member.allyCode]]["playerRating"] = member.playerRating;
-          guildData[g].member[memberIndex[member.allyCode]]["profileStat"] = member.profileStat;
-          guildData[g].member[memberIndex[member.allyCode]]["unlockedPlayerTitle"] = []; //GG doesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["unlockedPlayerPortrait"] = [];
-          guildData[g].member[memberIndex[member.allyCode]]["selectedPlayerTitle"] = {};
-          guildData[g].member[memberIndex[member.allyCode]]["selectedPlayerPortrait"] = {};
-          guildData[g].member[memberIndex[member.allyCode]]["seasonStatus"] = [];  //GG doesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["memberContribution"] = [];  //GG doesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["playerName"] = member.name;
-          guildData[g].member[memberIndex[member.allyCode]]["playerLevel"] = member.level;
-          guildData[g].member[memberIndex[member.allyCode]]["playerId"] = "";  //GG doesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["lastActivityTime"] =  "";  //GG doesn't provide this
-          guildData[g].member[memberIndex[member.allyCode]]["guildJoinTime"] = (new Date(guildData[g].member[memberIndex[member.allyCode]]["guild_join_time"].replace("-","/").replace("T"," ")).getTime() / 1000).toString();
-          guildData[g].member[memberIndex[member.allyCode]]["memberLevel"] = guildData[g].member[memberIndex[member.allyCode]].member_level;
-          guildData[g].member[memberIndex[member.allyCode]]["galacticPower"] = guildData[g].member[memberIndex[member.allyCode]].galactic_power;
-          guildData[g].member[memberIndex[member.allyCode]]["shipGalacticPower"] = "";
-          guildData[g].member[memberIndex[member.allyCode]]["characterGalacticPower"] = "";
-          guildData[g].member[memberIndex[member.allyCode]]["leagueId"] = guildData[g].member[memberIndex[member.allyCode]].league_id;
-          guildData[g].member[memberIndex[member.allyCode]]["lifetimeSeasonScore"] = guildData[g].member[memberIndex[member.allyCode]].lifetime_season_score;
-          guildData[g].member[memberIndex[member.allyCode]]["playerTitle"] = guildData[g].member[memberIndex[member.allyCode]].title;
+          guildData[g].member.push({
+          "localZoneOffsetMinutes": "",  //GGdoesn't provide this
+          "allyCode": member.allyCode,
+          "rosterUnit": member.rosterUnit,
+          "datacron": member.datacron,
+          "pvpProfile": member.pvpProfile,
+          "playerRating": member.playerRating,
+          "profileStat": member.profileStat,
+          "unlockedPlayerTitle": [], //GG doesn't provide this
+          "unlockedPlayerPortrait": [],
+          "selectedPlayerTitle": {},
+          "selectedPlayerPortrait": {},
+          "seasonStatus": [],  //GG doesn't provide this
+          "memberContribution": [],  //GG doesn't provide this
+          "playerName": member.name,
+          "playerLevel": member.level,
+          "playerId": "",  //GG doesn't provide this
+          "lastActivityTime":  "",  //GG doesn't provide this
+          "guildJoinTime": (new Date(guildData[g].members[memberIndex[member.allyCode]]["guild_join_time"].replace("-","/").replace("T"," ")).getTime() / 1000).toString(),
+          "memberLevel": guildData[g].members[memberIndex[member.allyCode]].member_level,
+          "galacticPower": guildData[g].members[memberIndex[member.allyCode]].galactic_power,
+          "shipGalacticPower": "",
+          "characterGalacticPower": "",
+          "leagueId": guildData[g].members[memberIndex[member.allyCode]].league_id,
+          "lifetimeSeasonScore": guildData[g].members[memberIndex[member.allyCode]].lifetime_season_score,
+          "playerTitle": guildData[g].members[memberIndex[member.allyCode]].title
+          });
         });
       }
 
@@ -568,7 +570,7 @@ Comlink.prototype.fetchData = function(collections = []){
   });
 
   //-->Fetch all of the data from the api  
-  for(let col in getCollections){
+  for(let col in getCollections){    
     if(col === "units") { col = "units_gas"};
     request.push(this.requestParameters_(this.url_data + col + ".json", "{}", "GET"));
     if(col === "units_gas") { col = "units"};
