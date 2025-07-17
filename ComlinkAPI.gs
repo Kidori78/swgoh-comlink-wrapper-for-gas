@@ -34,7 +34,7 @@
   * @param {Integer} rateLimit - Optional: The number of player profiles to get at once. Default is 100, limit is 100.
   * 
 */
-function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", rateLimit = 100) {
+function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", rateLimit = 100, dataURL = null) {
   /**
   */
   // Constructor //
@@ -59,11 +59,14 @@ function Comlink(host, accessKey = null, secretKey = null, language = "ENG_US", 
     this.useHMAC=true;
   }
   //-->URLs
+  if(host.substring(host.length-1) === "/"){
+    host = host.substring(0,host.length-1);
+  }
   this.host = host;
   this.usingGG = false;
   this.usingGithub = false;
   var url
-  this.url_data =`https://raw.githubusercontent.com/swgoh-utils/gamedata/main/`;
+  this.url_data = (dataURL !== null) ? dataURL : `https://raw.githubusercontent.com/swgoh-utils/gamedata/main/`;
   if(host.indexOf(",") > -1){
     this.host = host.split(",");
     url = this.host[0];
@@ -156,6 +159,9 @@ Comlink.prototype.fetchPlayers = function(id, enums = false, preBuild = false){
       let urlX = 0;
       let accessKey = this.accessKey;
       let secretKey = this.secretKey;
+      if(this.host[urlX].substring(this.host[urlX].length-1) === "/"){
+        this.host[urlX] = this.host[urlX].substring(0,this.host[urlX].length-1);
+      }
       id.forEach(player => {
           if(Array.isArray(this.accessKey)){
             accessKey = this.accessKey[urlX];
@@ -220,6 +226,9 @@ Comlink.prototype.fetchPlayerArena = function(id, enums = false, preBuild = fals
     let urlX = 0;
     let accessKey = this.accessKey;
     let secretKey = this.secretKey;
+    if(this.host[urlX].substring(this.host[urlX].length-1) === "/"){
+      this.host[urlX] = this.host[urlX].substring(0,this.host[urlX].length-1);
+    }
     id.forEach(player => {
         if(Array.isArray(this.accessKey)){
           accessKey = this.accessKey[urlX];
@@ -772,6 +781,11 @@ Comlink.prototype.fetchAPI_ = function(url,payload, methodType = "POST") {
       'Authorization': `HMAC-SHA256 Credential=${this.accessKey},Signature=${this.hmacSignature}`,
       'X-Date': requestTime
     };
+  }else if(this.host.indexOf("swgoh.gg") > -1){
+      secretKey = this.secretKey;
+      postHeader = {
+        "x-gg-bot-access": secretKey
+      }
   }
   parameters["headers"] = postHeader;
   if(methodType === "POST"){
@@ -868,6 +882,10 @@ Comlink.prototype.requestParameters_ = function(url, payload, methodType = "POST
       'Authorization': `HMAC-SHA256 Credential=${accessKey},Signature=${this.hmacSignature}`,
       'X-Date': requestTime
     };
+  }else if(this.host.indexOf("swgoh.gg") > -1){
+      postHeader = {
+        "x-gg-bot-access": secretKey
+      }
   }
   parameters["headers"] = postHeader;
   if(methodType === "POST"){
@@ -1264,6 +1282,7 @@ Comlink.prototype.getBuiltPlayerData_ = function(rawPlayerData){
           tier: mod.tier,
           pips: mod.pips,
           "set": Number(mod["setId"]),
+          "rerolledCount": mod.rerolledCount,
           slot: mod.slot,
           primaryStat: {
             unitStat: mod.primaryStat.stat.unitStatId,
@@ -1521,10 +1540,11 @@ Comlink.prototype.convertPlayerProfile_ = function(rawPlayerData){
       "tier": mod.tier,
       "pips": mod.rarity,
       "set": mod["set"],
-      "slot": (mod.slot + 1),
+      "slot": mod.slot,
+      "rerolledCount": mod.reroll_count,
       "primaryStat": {
         "unitStat": mod.primary_stat.stat_id,
-        "value": (flatValues[mod.primary_stat.stat_id]) ? mod.primary_stat.value / 10000 : mod.primary_stat.value / 100
+        "value": (flatValues[mod.primary_stat.stat_id]) ? mod.primary_stat.value : mod.primary_stat.value * 100
       },
       "secondaryStat": mod.secondary_stats.map(function(ss) {
         return {
@@ -2165,4 +2185,3 @@ function getStatDefinitions(){
     }
   }
 }
-
